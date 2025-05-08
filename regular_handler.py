@@ -54,7 +54,7 @@ def load_regular_model(
     torch_dtype_str="auto",
     use_bnb_4bit=False,
     trust_remote_code=True, # Default to True, can be overridden
-    **kwargs # For other pipeline/model loading kwargs
+    **kwargs # For other pipeline/model loading kwargs. In current app.py usage, this is empty.
 ):
     """Loads a regular Hugging Face model using transformers.pipeline."""
     logger.info(f"Loading Regular HF model: {model_identifier} with device_map={device_map}, "
@@ -72,42 +72,48 @@ def load_regular_model(
             bnb_4bit_use_double_quant=True,
         )
         logger.info(f"Using BitsAndBytes 4-bit quantization with compute_dtype: {compute_dtype}.")
-        # If quantizing, torch_dtype for the main model load should be None or auto,
-        # as BNB handles the dtype of quantized layers.
-        # However, `pipeline` might still want a general dtype. Setting to None if quantizing.
-        # actual_torch_dtype = None # Let BNB handle it.
 
     try:
         tokenizer_load_kwargs = {"trust_remote_code": trust_remote_code}
+        
+        # Arguments for the transformers.pipeline() constructor.
+        # Includes explicit parameters from this function's signature and any others passed via **kwargs.
+        # (In the current app.py setup, **kwargs passed to load_regular_model is empty as all relevant
+        # hf_load_args from app.py are captured by named parameters like device_map, etc.)
         pipeline_load_kwargs = {
             "device_map": device_map,
             "trust_remote_code": trust_remote_code,
-            # Pass torch_dtype unless bnb is used, then it might be better to let bnb control.
-            # Or, pass compute_dtype if that makes more sense for pipeline's expectation.
-            # For simplicity, pass what was derived. BNB will override for its layers.
             "torch_dtype": actual_torch_dtype,
             "quantization_config": quantization_config,
+            **kwargs 
         }
         
-        # Add token for both tokenizer and model loading if available
+        # Add token for tokenizer and pipeline loading if available
         if HF_TOKEN:
             tokenizer_load_kwargs["token"] = HF_TOKEN
-            # Pass token to model_kwargs for pipeline, so it gets to model.from_pretrained
-            pipeline_load_kwargs["model_kwargs"] = pipeline_load_kwargs.get("model_kwargs", {})
-            pipeline_load_kwargs["model_kwargs"]["token"] = HF_TOKEN
+            # Pass token directly as an argument to the pipeline constructor
+            pipeline_load_kwargs["token"] = HF_TOKEN
 
+            # Defensive check: If `kwargs` (and thus `pipeline_load_kwargs`) somehow contained `model_kwargs`
+            # which itself contained a 'token', it could conflict with the direct 'token' argument.
+            # The Hugging Face `pipeline` function should prioritize the direct `token` argument.
+            # However, to be absolutely safe and clear, if such a nested token exists,
+            # we can log a warning or remove it. For now, we rely on pipeline's behavior.
+            if "model_kwargs" in pipeline_load_kwargs and \
+               isinstance(pipeline_load_kwargs["model_kwargs"], dict) and \
+               "token" in pipeline_load_kwargs["model_kwargs"]:
+                logger.warning(
+                    "A 'token' was found within 'model_kwargs' while also setting a direct 'token' for the pipeline. "
+                    "The direct 'token' will be used by the pipeline. Consider removing the nested 'token'."
+                )
+                # Optionally, could `del pipeline_load_kwargs["model_kwargs"]["token"]` here.
 
-        # It's often better to load tokenizer first to inspect it, e.g., for chat templates
         tokenizer = AutoTokenizer.from_pretrained(model_identifier, **tokenizer_load_kwargs)
-
-        # TextIteratorStreamer needs to be initialized for streaming
-        # This is not part of model loading but generation setup.
-        # from transformers import TextIteratorStreamer (moved to generate_regular_chat_stream)
 
         pipe = pipeline(
             "text-generation",
             model=model_identifier,
-            tokenizer=tokenizer, # Pass the pre-loaded tokenizer
+            tokenizer=tokenizer, 
             **pipeline_load_kwargs
         )
         logger.info(f"Successfully loaded Regular HF model: {model_identifier}")
@@ -145,11 +151,7 @@ def generate_regular_chat_stream(
     if pipe_instance.tokenizer.chat_template is None:
         logger.warning(f"Tokenizer for {pipe_instance.model.name_or_path} does not have a chat_template. "
                        "Falling back to basic concatenation, which might be suboptimal.")
-        # Basic fallback: join messages. For proper non-chat-templated models, format a single prompt string.
         prompt_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in converted_messages])
-        # Add an assistant turn prompt if this is how the model expects it
-        # This part is model-specific if no chat template.
-        # For now, we assume the model can take the raw history.
         input_for_pipeline = prompt_text
     else:
         input_for_pipeline = converted_messages # Pipeline handles chat template
@@ -157,23 +159,22 @@ def generate_regular_chat_stream(
     streamer = TextIteratorStreamer(
         pipe_instance.tokenizer,
         skip_prompt=True,
-        skip_special_tokens=True # Usually, we don't want EOS/BOS tokens in the stream
+        skip_special_tokens=True 
     )
 
     generation_kwargs = {
         "max_new_tokens": max_new_tokens,
-        "temperature": temperature if do_sample else None, # Temp only for sampling
+        "temperature": temperature if do_sample else None, 
         "top_k": top_k if do_sample else None,
         "top_p": top_p if do_sample else None,
         "do_sample": do_sample,
         "repetition_penalty": repetition_penalty,
         "streamer": streamer,
-        "return_full_text": False, # Crucial for chat, ensures only new text is part of stream
+        "return_full_text": False, 
     }
 
-    # Add any other specific kwargs passed for generation
     for k, v in kwargs.items():
-        if k not in generation_kwargs and v is not None: # Avoid overriding main params
+        if k not in generation_kwargs and v is not None: 
             generation_kwargs[k] = v
 
     thread = Thread(target=pipe_instance, args=(input_for_pipeline,), kwargs=generation_kwargs)
@@ -186,7 +187,7 @@ def generate_regular_chat_stream(
                 full_response_text += new_text_chunk
                 yield new_text_chunk
 
-        thread.join(timeout=kwargs.get("thread_join_timeout", 30)) # Increased timeout
+        thread.join(timeout=kwargs.get("thread_join_timeout", 30)) 
         if thread.is_alive():
             logger.warning(f"Generation thread for {pipe_instance.model.name_or_path} did not finish in time.")
 
