@@ -1,0 +1,165 @@
+{
+	"info": {
+		"_postman_id": "YOUR_UNIQUE_COLLECTION_ID",
+		"name": "My Local AI Studio API",
+		"description": "Collection for interacting with the My Local AI Studio Flask backend.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Get Available Models",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/models",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"models"
+					]
+				},
+				"description": "Retrieves a list of all available models (GGUF and Regular HF) that the backend has detected or are defined in `online_models.json`."
+			},
+			"response": []
+		},
+		{
+			"name": "2. Create New Backend Session",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// This script automatically extracts the session_id from the response",
+							"// and sets it as a Postman environment variable named 'current_session_id'.",
+							"// Make sure you have an active Postman environment selected.",
+							"",
+							"var jsonData = pm.response.json();",
+							"if (jsonData && jsonData.session_id) {",
+							"    pm.environment.set(\"current_session_id\", jsonData.session_id);",
+							"    console.log(\"Set environment variable 'current_session_id' to: \" + jsonData.session_id);",
+							"} else {",
+							"    console.error(\"Could not find session_id in the response.\");",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/create-session",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"create-session"
+					]
+				},
+				"description": "Creates a new backend session ID. This ID is required for chat and history clearing operations for that session."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Chat (Stream)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"session_id\": \"{{current_session_id}}\", // Or paste a session ID obtained from /create-session\n    \"model_id\": \"your_gguf_model_id_here\", // Replace with actual model_id from /models\n    \"prompt\": \"What is the capital of France?\",\n    \"system_prompt\": \"You are a helpful assistant.\",\n    \"temperature\": 0.7,\n    \"model_load_params\": {\n        // --- GGUF Load Params (Example) ---\n        // \"n_gpu_layers\": -1, // Number of layers to offload to GPU, -1 for all\n        // \"verbose\": false\n\n        // --- Regular HF Load Params (Example) ---\n        // \"use_bnb_4bit\": false, // Set to true for 4-bit quantization (if supported)\n        // \"trust_remote_code\": true,\n        // \"torch_dtype_str\": \"auto\" // e.g., \"torch.float16\", \"torch.bfloat16\"\n    },\n    \"model_specific_params\": {\n        // --- GGUF Generation Params (Example) ---\n        // \"max_tokens\": 512,\n        // \"top_k\": 40,\n        // \"top_p\": 0.95,\n        // \"repeat_penalty\": 1.1,\n        // \"stop\": [\"User:\", \"\\nHuman:\"],\n        // \"grammar_str\": null // Example: \"root ::= \\\"hello\\\"\"\n\n        // --- Regular HF Generation Params (Example) ---\n        \"max_new_tokens\": 256,\n        \"do_sample\": true,\n        \"top_k\": 50,\n        \"top_p\": 0.95,\n        \"repetition_penalty\": 1.1\n    }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/chat",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"chat"
+					]
+				},
+				"description": "Sends a prompt to the selected model and receives a streamed response.\n\n**Instructions:**\n1. Ensure `{{base_url}}` is set in your Postman environment (e.g., `http://localhost:5000`).\n2. Obtain a `session_id` from the `/create-session` endpoint and replace `\"{{current_session_id}}\"` or ensure the test script sets it.\n3. Replace `\"your_gguf_model_id_here\"` or `\"your_regular_hf_model_id_here\"` with an actual `model_id` from the `/models` endpoint.\n4. Adjust `model_load_params` if you want to control how the model is loaded (e.g., `n_gpu_layers` for GGUF, `use_bnb_4bit` for HF). These params might cause a model reload if they differ from the cached instance.\n5. Adjust `model_specific_params` for generation settings specific to the model type.\n\n**Note on `model_load_params` vs `model_specific_params`:**\n- `model_load_params`: Parameters affecting how the model is loaded into memory (e.g., quantization, GPU layers). Changing these might trigger a model reload.\n- `model_specific_params`: Parameters affecting the text generation process for an already loaded model (e.g., max tokens, sampling strategy).\n\nThe backend will determine the model type (GGUF or Regular HF) based on the `model_id` and apply the relevant parameters from `model_load_params` and `model_specific_params` sections."
+			},
+			"response": []
+		},
+		{
+			"name": "4. Clear Backend History for Current Session",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"session_id\": \"{{current_session_id}}\" // Or paste a session ID\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/clear-backend-history",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"clear-backend-history"
+					]
+				},
+				"description": "Clears the chat history stored on the backend for the specified `session_id`. This effectively resets the model's memory for the current conversation stream."
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"type": "string",
+			"description": "The base URL of your My Local AI Studio API."
+		},
+		{
+			"key": "current_session_id",
+			"value": "",
+			"type": "string",
+			"description": "Stores the session ID from the /create-session response. Can be set automatically by the test script in that request."
+		}
+	]
+}
