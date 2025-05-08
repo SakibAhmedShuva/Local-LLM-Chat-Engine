@@ -1,6 +1,3 @@
-# gguf_handler.py
-# ... (no changes in this file based on the diagnosis) ...
-
 # app.py
 import os
 import json
@@ -11,14 +8,14 @@ from flask import Flask, request, jsonify, Response, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 from uuid import uuid4
-from llama_index.core.llms import ChatMessage, MessageRole # Re-using for message structure
+from llama_index.core.llms import ChatMessage, MessageRole
 
 # Load environment variables from .env file (e.g., HUGGING_FACE_HUB_TOKEN)
 load_dotenv()
 
 # Import handlers
 import gguf_handler
-import regular_handler
+import regular_handler # Assuming you have this for other model types
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -31,11 +28,14 @@ GGUF_MODELS_DIR = "models/gguf"
 REGULAR_MODELS_DIR = "models/regular"
 ONLINE_MODELS_CONFIG_FILE = "online_models.json" # Optional config for Hub models
 
-# In-memory cache for loaded models to avoid reloading
-# Stores {'model_id': {'instance': model_instance, 'load_info': {params_used_for_load}}}
+# In-memory cache for loaded models
+# For GGUF, it will store:
+# {'model_id': {'instance': model_instance, 'load_info': {...}, 'lock': threading.Lock()}}
+# For Regular, it will store:
+# {'model_id': {'instance': model_instance, 'load_info': {...}}}
 LOADED_MODELS_CACHE = {}
 MODEL_INFO_CACHE = []    # Stores list of dicts: {'id': ..., 'name': ..., 'type': ..., 'path'/'repo_id': ..., 'params': {...}}
-model_load_lock = threading.Lock()
+model_load_lock = threading.Lock() # Global lock for the loading process itself
 
 def get_model_filename_no_ext(path_or_filename):
     return os.path.splitext(os.path.basename(path_or_filename))[0]
@@ -115,11 +115,11 @@ def scan_available_models():
                     "type": "regular",
                     "source_type": "local",
                     "path": model_dir_path, # Local path (acts as identifier)
-                    "params": {
-                        "default_max_new_tokens": regular_handler.DEFAULT_HF_MAX_NEW_TOKENS,
-                        "default_temperature": regular_handler.DEFAULT_HF_TEMPERATURE,
-                        "default_do_sample": regular_handler.DEFAULT_HF_DO_SAMPLE,
-                        "trust_remote_code_default": True, # Often needed for local complex models too
+                    "params": { # Default/Info params for UI (adjust as needed for regular_handler)
+                        "default_max_new_tokens": regular_handler.DEFAULT_HF_MAX_NEW_TOKENS if 'regular_handler' in globals() else 512,
+                        "default_temperature": regular_handler.DEFAULT_HF_TEMPERATURE if 'regular_handler' in globals() else 0.7,
+                        "default_do_sample": regular_handler.DEFAULT_HF_DO_SAMPLE if 'regular_handler' in globals() else True,
+                        "trust_remote_code_default": True, 
                     }
                 })
                 processed_ids.add(model_id)
@@ -129,11 +129,14 @@ def scan_available_models():
         logger.warning("No models found or defined. Please add models to ./models/ directories or define in online_models.json.")
 
 
+def get_model_data_from_cache(model_id: str):
+    """Helper to retrieve full model data (instance, lock, etc.) from cache."""
+    return LOADED_MODELS_CACHE.get(model_id)
+
 def get_model_instance(model_id: str, model_load_params: dict = None):
     """
     Retrieves a loaded model instance. If not loaded, loads it.
-    model_load_params are specific to the model type for loading (e.g., n_gpu_layers for GGUF)
-    and are passed from the frontend with each request.
+    Returns the model instance.
     """
     if model_load_params is None:
         model_load_params = {}
@@ -142,12 +145,10 @@ def get_model_instance(model_id: str, model_load_params: dict = None):
     if not model_meta:
         raise ValueError(f"Model ID {model_id} not found in available models.")
 
-    # --- Cache Check & Invalidation (Simplified) ---
-    # A more robust cache would compare all relevant model_load_params against cached_load_info.
-    # For now, if n_gpu_layers (GGUF) or use_bnb_4bit (HF) changes, we force a reload by clearing cache.
-    # This is a basic invalidation strategy.
-    if model_id in LOADED_MODELS_CACHE:
-        cached_data = LOADED_MODELS_CACHE[model_id]
+    cached_data = LOADED_MODELS_CACHE.get(model_id)
+
+    # --- Cache Check & Invalidation Logic ---
+    if cached_data:
         cached_load_info = cached_data.get('load_info', {})
         reload_required = False
 
@@ -157,27 +158,27 @@ def get_model_instance(model_id: str, model_load_params: dict = None):
                 logger.info(f"GGUF {model_id}: n_gpu_layers changed ({cached_load_info.get('n_gpu_layers')} -> {requested_gpu_layers}). Reloading.")
                 reload_required = True
         elif model_meta['type'] == 'regular':
-            requested_bnb = model_load_params.get('use_bnb_4bit', False)
+            requested_bnb = model_load_params.get('use_bnb_4bit', False) # Example for regular model
             if cached_load_info.get('use_bnb_4bit') != requested_bnb:
                 logger.info(f"Regular HF {model_id}: use_bnb_4bit changed ({cached_load_info.get('use_bnb_4bit')} -> {requested_bnb}). Reloading.")
                 reload_required = True
-            # Could add checks for trust_remote_code, torch_dtype_str if they become dynamic per request
         
         if reload_required:
-            with model_load_lock: # Ensure thread-safe removal
+            with model_load_lock: # Ensure thread-safe removal from cache
                  LOADED_MODELS_CACHE.pop(model_id, None) # Remove to force reload
                  logger.info(f"Removed {model_id} from cache due to changed load parameters.")
+                 cached_data = None # Nullify to ensure load path is taken
         elif cached_data.get('instance'):
             logger.info(f"Using cached model instance for: {model_id}")
-            return cached_data['instance']
+            return cached_data['instance'] # Return only the instance
 
-
-    with model_load_lock: # Ensure only one thread tries to load the same model simultaneously
+    # If not cached_data or reload was required and it was popped
+    with model_load_lock: # Global lock for the loading operation itself
         # Double check cache after acquiring lock, another thread might have loaded it.
-        if model_id in LOADED_MODELS_CACHE and LOADED_MODELS_CACHE[model_id].get('instance'):
-             # Basic re-check if invalidation happened above and another thread reloaded with *new* params
+        cached_data = LOADED_MODELS_CACHE.get(model_id)
+        if cached_data and cached_data.get('instance'):
             logger.info(f"Model {model_id} was loaded by another thread while waiting. Using it.")
-            return LOADED_MODELS_CACHE[model_id]['instance']
+            return cached_data['instance']
 
         logger.info(f"Attempting to load model: {model_id} ({model_meta['name']}) with params: {model_load_params}")
         instance = None
@@ -193,29 +194,31 @@ def get_model_instance(model_id: str, model_load_params: dict = None):
             else:
                 raise ValueError(f"GGUF model_meta for {model_id} is malformed.")
 
-            # n_ctx for GGUF is a loading parameter. Get from model_meta.params first, then handler default.
-            # UI doesn't directly send n_ctx as a model_load_param currently, but could be added.
             n_ctx_load = model_meta.get('params', {}).get('n_ctx', gguf_handler.DEFAULT_N_CTX)
-            
             gpu_layers_load = model_load_params.get('n_gpu_layers', 
                                      model_meta.get('params', {}).get('n_gpu_layers_default', gguf_handler.DEFAULT_N_GPU_LAYERS))
             actual_params_used_for_load['n_gpu_layers'] = gpu_layers_load
             actual_params_used_for_load['n_ctx'] = n_ctx_load
 
-
             instance = gguf_handler.load_gguf_model(
                 gguf_spec,
                 n_gpu_layers=gpu_layers_load,
-                n_ctx=n_ctx_load, # Pass n_ctx for loading
-                verbose=model_load_params.get('verbose', False) # Example other load param
+                n_ctx=n_ctx_load,
+                verbose=model_load_params.get('verbose', False)
             )
+            if instance:
+                instance_generation_lock = threading.Lock()
+                LOADED_MODELS_CACHE[model_id] = {
+                    'instance': instance,
+                    'load_info': actual_params_used_for_load,
+                    'lock': instance_generation_lock # Store the lock for GGUF generation
+                }
+                logger.info(f"Successfully loaded and cached GGUF model with generation lock: {model_id}")
+
         elif model_meta['type'] == 'regular':
             # model_meta['path'] is the identifier (local path OR Hub ID)
             model_identifier_for_hf = model_meta['path']
-            
-            # Get default trust_remote_code from model_meta if defined, else True
             default_trust_remote = model_meta.get('params', {}).get('trust_remote_code_default', True)
-            
             hf_load_args = {
                 "device_map": model_load_params.get('device_map', "auto"),
                 "torch_dtype_str": model_load_params.get('torch_dtype_str', "auto"),
@@ -223,22 +226,24 @@ def get_model_instance(model_id: str, model_load_params: dict = None):
                 "trust_remote_code": model_load_params.get('trust_remote_code', default_trust_remote)
             }
             actual_params_used_for_load.update(hf_load_args)
-
             instance = regular_handler.load_regular_model(
                 model_identifier_for_hf,
                 **hf_load_args
             )
+            if instance:
+                LOADED_MODELS_CACHE[model_id] = { # Regular models don't get the specific 'lock' here
+                    'instance': instance,
+                    'load_info': actual_params_used_for_load
+                }
+                logger.info(f"Successfully loaded and cached regular model: {model_id}")
         
-        if instance:
-            LOADED_MODELS_CACHE[model_id] = {'instance': instance, 'load_info': actual_params_used_for_load}
-            logger.info(f"Successfully loaded and cached model: {model_id}")
-        else:
+        if not instance: # If instance is still None after trying to load
             logger.error(f"Failed to load model instance for {model_id}")
-            # LOADED_MODELS_CACHE.pop(model_id, None) # Ensure it's not in cache if load failed
+            # LOADED_MODELS_CACHE.pop(model_id, None) # Ensure it's not in cache if load failed (optional)
             raise RuntimeError(f"Could not load model {model_id}")
         return instance
 
-# --- Session Management (same as your original) ---
+# --- Session Management ---
 session_histories = {}
 history_lock = threading.Lock()
 
@@ -301,12 +306,21 @@ def generate_chat_stream_response(payload):
     # model_load_params are for LOADING the model (e.g., n_gpu_layers, use_bnb_4bit)
     model_load_params = payload.get('model_load_params', {})
 
-    # Basic validation
-    if not all([session_id, user_prompt_text, model_id_selected]):
-        missing = [k for k,v in {'session_id':session_id, 'prompt':user_prompt_text, 'model_id':model_id_selected}.items() if not v]
-        error_msg = f"Missing required fields: {', '.join(missing)}"
-        yield f"data: {json.dumps({'error': error_msg, 'is_final': True})}\n\n"
-        return
+    # --- CORRECTED Basic validation ---
+    if not all([session_id, user_prompt_text is not None, model_id_selected]): # user_prompt_text can be empty but must be present
+        missing_vars_check = {'session_id': session_id, 'prompt': user_prompt_text, 'model_id': model_id_selected}
+        # Check specifically for None for prompt, as empty string is allowed.
+        missing = [k for k, v in missing_vars_check.items() if v is None or (isinstance(v, str) and not v.strip() and k != 'prompt')]
+        if user_prompt_text is None: # Explicitly add prompt if it's None
+             if 'prompt' not in missing: missing.append('prompt')
+        
+        if missing: # Only yield error if there are genuinely missing required fields
+            missing_fields_str = ", ".join(missing)
+            error_detail_msg = f"Missing required fields: {missing_fields_str}"
+            yield f"data: {json.dumps({'error': error_detail_msg, 'is_final': True})}\n\n"
+            return
+    # --- End of corrected validation ---
+
 
     model_meta = next((m for m in MODEL_INFO_CACHE if m['id'] == model_id_selected), None)
     if not model_meta:
@@ -316,18 +330,34 @@ def generate_chat_stream_response(payload):
     try:
         llm_instance = get_model_instance(model_id_selected, model_load_params)
         
+        gguf_instance_lock = None
+        if model_meta['type'] == 'gguf':
+            cached_model_data = get_model_data_from_cache(model_id_selected)
+            if cached_model_data and 'lock' in cached_model_data:
+                gguf_instance_lock = cached_model_data['lock']
+            else:
+                logger.error(f"CRITICAL: GGUF instance lock NOT FOUND for {model_id_selected}. THIS IS UNEXPECTED if model was loaded.")
+                # Decide on behavior: proceed without lock (unsafe) or return error
+                # For safety, returning an error might be better if lock is expected
+                # yield f"data: {json.dumps({'error': f'Internal server error: GGUF lock missing for {model_id_selected}', 'is_final': True})}\n\n"
+                # return
+
+
         messages_for_llm = []
         with history_lock:
             current_history_dicts = list(session_histories.get(session_id, []))
 
-            if system_prompt_text:
+            if system_prompt_text: # Add system prompt if provided
                 messages_for_llm.append(ChatMessage(role=MessageRole.SYSTEM, content=system_prompt_text))
 
+            # Add historical messages
             for msg_dict in current_history_dicts:
+                # Avoid duplicate system prompts if already added and it's the first message
                 if msg_dict.get("role") == MessageRole.SYSTEM and messages_for_llm and messages_for_llm[0].role == MessageRole.SYSTEM:
-                    continue
+                    continue 
                 messages_for_llm.append(ChatMessage(role=MessageRole(msg_dict["role"]), content=str(msg_dict["content"])))
         
+        # Add current user prompt
         user_chat_message = ChatMessage(role=MessageRole.USER, content=user_prompt_text)
         messages_for_llm.append(user_chat_message)
 
@@ -336,15 +366,9 @@ def generate_chat_stream_response(payload):
 
         full_response_content = ""
         stream_iterator = None
-        
-        # Common generation params
-        common_gen_kwargs = {
-            "temperature": temperature,
-            # Other params will be pulled from generation_params specific to model type
-        }
+        common_gen_kwargs = {"temperature": temperature}
 
         if model_meta['type'] == 'gguf':
-            # Merge common with GGUF specific from generation_params
             gguf_gen_kwargs = {
                 **common_gen_kwargs,
                 "max_tokens": int(generation_params.get('max_tokens', gguf_handler.DEFAULT_MAX_TOKENS)),
@@ -352,20 +376,20 @@ def generate_chat_stream_response(payload):
                 "top_p": float(generation_params.get('top_p', gguf_handler.DEFAULT_TOP_P)),
                 "repeat_penalty": float(generation_params.get('repeat_penalty', gguf_handler.DEFAULT_REPEAT_PENALTY)),
                 "stop": generation_params.get('stop', None),
-                "grammar_str": generation_params.get('grammar_str', None)
+                "grammar_str": generation_params.get('grammar_str', None),
+                "instance_lock": gguf_instance_lock # Pass the lock to the handler
             }
             stream_iterator = gguf_handler.generate_gguf_chat_stream(
                 llm_instance, messages_for_llm, **gguf_gen_kwargs
             )
         elif model_meta['type'] == 'regular':
-            # Merge common with Regular HF specific from generation_params
             hf_gen_kwargs = {
                 **common_gen_kwargs,
-                "max_new_tokens": int(generation_params.get('max_new_tokens', regular_handler.DEFAULT_HF_MAX_NEW_TOKENS)),
-                "top_k": int(generation_params.get('top_k', regular_handler.DEFAULT_HF_TOP_K)),
-                "top_p": float(generation_params.get('top_p', regular_handler.DEFAULT_HF_TOP_P)),
-                "do_sample": bool(generation_params.get('do_sample', regular_handler.DEFAULT_HF_DO_SAMPLE)),
-                "repetition_penalty": float(generation_params.get('repetition_penalty', regular_handler.DEFAULT_REPETITION_PENALTY))
+                "max_new_tokens": int(generation_params.get('max_new_tokens', regular_handler.DEFAULT_HF_MAX_NEW_TOKENS if 'regular_handler' in globals() else 512)),
+                "top_k": int(generation_params.get('top_k', regular_handler.DEFAULT_HF_TOP_K if 'regular_handler' in globals() else 50)),
+                "top_p": float(generation_params.get('top_p', regular_handler.DEFAULT_HF_TOP_P if 'regular_handler' in globals() else 0.95)),
+                "do_sample": bool(generation_params.get('do_sample', regular_handler.DEFAULT_HF_DO_SAMPLE if 'regular_handler' in globals() else True)),
+                "repetition_penalty": float(generation_params.get('repetition_penalty', regular_handler.DEFAULT_REPETITION_PENALTY if 'regular_handler' in globals() else 1.1))
             }
             stream_iterator = regular_handler.generate_regular_chat_stream(
                 llm_instance, messages_for_llm, **hf_gen_kwargs
@@ -376,23 +400,30 @@ def generate_chat_stream_response(payload):
             return
 
         for chunk_content in stream_iterator:
-            if chunk_content:
+            if chunk_content: # Ensure chunk is not None or empty before processing
                 full_response_content += chunk_content
                 yield f"data: {json.dumps({'text_chunk': chunk_content, 'is_final': False})}\n\n"
         
+        # Update history after successful generation
         with history_lock:
-            if session_id not in session_histories:
+            if session_id not in session_histories: # Should be initialized, but good to check
                  initialize_session_history(session_id)
 
+            # Persist system prompt in history if it was used for this turn
             if system_prompt_text:
-                if not session_histories[session_id] or session_histories[session_id][0].get("role") != MessageRole.SYSTEM:
-                    session_histories[session_id].insert(0, {"role": MessageRole.SYSTEM, "content": system_prompt_text})
-                elif session_histories[session_id][0].get("content") != system_prompt_text:
-                     session_histories[session_id][0]["content"] = system_prompt_text
+                # If history is empty or first message isn't this system prompt
+                if not session_histories[session_id] or \
+                   not (session_histories[session_id][0].get("role") == MessageRole.SYSTEM and \
+                        session_histories[session_id][0].get("content") == system_prompt_text):
+                    # Check if a different system prompt is already there
+                    if session_histories[session_id] and session_histories[session_id][0].get("role") == MessageRole.SYSTEM:
+                        session_histories[session_id][0]["content"] = system_prompt_text # Update existing
+                    else:
+                        session_histories[session_id].insert(0, {"role": MessageRole.SYSTEM, "content": system_prompt_text}) # Add new
             
             session_histories[session_id].append({"role": MessageRole.USER, "content": user_prompt_text})
             session_histories[session_id].append({"role": MessageRole.ASSISTANT, "content": full_response_content})
-            # Optional: Limit history size (consider system prompt preservation)
+            # Optional: Implement history size limit here
 
         logger.info(f"Session {session_id} - LLM full response length: {len(full_response_content)}. History size: {len(session_histories.get(session_id, []))}")
         yield f"data: {json.dumps({'full_response': full_response_content, 'is_final': True})}\n\n"
@@ -424,4 +455,8 @@ if __name__ == '__main__':
         print("Please add GGUF files to ./models/gguf/ OR Hugging Face model directories to ./models/regular/ "
               "OR define models in online_models.json and restart the server.")
 
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # For development and testing the GGUF lock, threaded=True is useful.
+    # For production, use a WSGI server like Gunicorn.
+    # If Gunicorn uses threaded workers, this GGUF lock is essential.
+    # If Gunicorn uses sync workers, each worker process has its own GGUF instance & lock.
+    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
