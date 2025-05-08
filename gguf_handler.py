@@ -54,9 +54,16 @@ def load_gguf_model(
 
     # Filter out keys already handled by main params or not relevant to Llama constructor
     # to avoid passing them twice or causing errors.
-    # verbose is a common Llama constructor arg.
+    # 'verbose' is handled by the explicit `verbose=kwargs.get('verbose', False)` passed to Llama() / Llama.from_pretrained().
+    # Thus, 'verbose' should NOT be in the list for `llama_constructor_kwargs`.
+    # Other keys like 'n_gpu_layers', 'n_ctx' are also handled explicitly as function parameters.
+    # model_path, repo_id, filename are from model_spec.
+    
+    # Whitelist of Llama constructor arguments that can be passed via kwargs from the calling function (e.g., app.py).
+    # 'verbose' is excluded here because it's passed directly to Llama/Llama.from_pretrained.
+    pass_through_keys = ['seed', 'logits_all', 'embedding'] # Add other valid Llama args like 'n_threads', 'n_batch' if needed.
     llama_constructor_kwargs = {
-        k: v for k, v in kwargs.items() if k in ['verbose', 'seed', 'logits_all', 'embedding'] # Add other valid Llama args
+        k: v for k, v in kwargs.items() if k in pass_through_keys
     }
 
 
@@ -69,8 +76,8 @@ def load_gguf_model(
                 filename=hub_filename,
                 n_gpu_layers=n_gpu_layers,
                 n_ctx=n_ctx,
-                verbose=kwargs.get('verbose', False), # Pass verbose if provided
-                **llama_constructor_kwargs # Pass other filtered kwargs
+                verbose=kwargs.get('verbose', False), # Pass verbose explicitly
+                **llama_constructor_kwargs # Pass other filtered kwargs (which no longer contain 'verbose')
             )
             logger.info(f"Successfully loaded GGUF model from Hub: {hub_repo_id}/{hub_filename}")
         elif local_model_path:
@@ -83,8 +90,8 @@ def load_gguf_model(
                 model_path=local_model_path,
                 n_gpu_layers=n_gpu_layers,
                 n_ctx=n_ctx,
-                verbose=kwargs.get('verbose', False),
-                **llama_constructor_kwargs
+                verbose=kwargs.get('verbose', False), # Pass verbose explicitly
+                **llama_constructor_kwargs # Pass other filtered kwargs (which no longer contain 'verbose')
             )
             logger.info(f"Successfully loaded GGUF model from local path: {local_model_path}")
         else:
