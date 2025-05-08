@@ -296,12 +296,33 @@
             max-width: 500px;
             line-height: 1.6;
         }
+        
+        /* NEW: Styles for the main message container that includes the bubble and model name */
+        .message-container {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 12px; /* This margin is now on the container */
+            max-width: 75%; /* Max width is on the container */
+        }
+        .message-container.user {
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        .message-container.ai {
+            align-self: flex-start;
+            margin-right: auto;
+        }
+        .message-container.error { /* For error messages that might be centered */
+            align-self: center;
+            max-width: 90%;
+        }
+
 
         .message {
             padding: 12px 18px;
             border-radius: var(--border-radius-lg); 
-            margin-bottom: 12px;
-            max-width: 75%; 
+            /* margin-bottom removed, now on .message-container */
+            /* max-width removed, now on .message-container */
             word-wrap: break-word;
             line-height: 1.6;
             white-space: pre-wrap;
@@ -315,30 +336,27 @@
         .message.user {
             background-color: var(--primary-color);
             color: var(--text-light);
-            align-self: flex-end;
-            margin-left: auto;
+            /* align-self and margin-left removed, now on .message-container.user */
             border-bottom-right-radius: var(--border-radius-sm); 
         }
         .message.ai {
             background-color: var(--background-card);
             color: var(--text-primary);
-            align-self: flex-start;
-            margin-right: auto;
+            /* align-self and margin-right removed, now on .message-container.ai */
             border: 1px solid var(--border-color);
             border-bottom-left-radius: var(--border-radius-sm); 
         }
         .message.error {
             background-color: #FFCDD2; 
             color: #D32F2F; 
-            align-self: center;
+            /* align-self removed, now on .message-container.error */
             text-align: center;
-            max-width: 90%;
             border: 1px solid #E57373; 
         }
         .message.loading { 
             font-style: italic;
             color: var(--text-secondary);
-            align-self: flex-start;
+            /* align-self removed, now on .message-container.ai for consistency if it becomes a loading container */
             background-color: transparent;
             box-shadow: none;
             border: none;
@@ -353,6 +371,21 @@
             vertical-align: text-bottom;
         }
         @keyframes blink { 50% { opacity: 0; } }
+
+        /* NEW: Style for model name display under AI messages */
+        .message-model-name {
+            font-size: 0.75em; /* Smaller font */
+            color: var(--text-secondary); /* Greyish color */
+            opacity: 0.8;
+            padding: 4px 12px 0px 12px; /* Some padding, less on bottom */
+            text-align: left; /* Align to the start of the AI bubble */
+            /* No margin-top here, as .message-container handles overall spacing */
+        }
+        /* For user messages, this div won't exist, but if it did, it'd be aligned right */
+        .message-container.user .message-model-name {
+            text-align: right;
+        }
+
 
         .system-prompt-container {
             margin: 0 auto 16px auto;
@@ -832,16 +865,13 @@
             const API_MODELS_URL = `${API_BASE_URL}/models`;
             
             // --- State Variables (Declare at the top) ---
-            // The error was because availableModels was declared AFTER the first call to createNewFrontendChatObject
             let chatHistoryIndex = []; 
             let currentBackendSessionId = null;
-            let availableModels = []; // Moved declaration to the top
-            let currentChatSession = null; // Initialize to null, will be set later by startNewFrontendChatSession
+            let availableModels = []; 
+            let currentChatSession = null; 
 
 
-            // --- DEFAULT PARAM VALUES (from backend handlers if not specified in model.params) ---
-            // These are just for fallback if model.params doesn't provide them,
-            // the backend has its own defaults too.
+            // --- DEFAULT PARAM VALUES ---
             const JS_DEFAULT_GGUF_N_CTX = 4096;
             const JS_DEFAULT_GGUF_MAX_TOKENS = 512;
             const JS_DEFAULT_GGUF_TEMP = 0.7;
@@ -860,51 +890,36 @@
 
             // --- Initialization ---
             async function initializeApp() {
-                console.log("initializeApp called."); // Debug log
                 if (appLogo) appLogo.textContent = APP_NAME;
                 if (welcomeHeader) welcomeHeader.innerHTML = `Welcome to ${APP_NAME}`;
                 
-                loadChatHistoryIndex(); // Uses chatHistoryIndex
-                await fetchAndPopulateModels(); // Uses and populates availableModels
-                console.log("fetchAndPopulateModels finished."); // Debug log
+                loadChatHistoryIndex(); 
+                await fetchAndPopulateModels(); 
                 
-                // If no models, resetSettingsToDefault might not behave as expected
-                // fetchAndPopulateModels handles setting a default if models exist
                 if (availableModels.length === 0) {
                     modelInfoDiv.textContent = "No models found on server. Please add models to 'models/gguf' or 'models/regular' and restart server.";
                     temperatureSlider.disabled = true;
                     temperatureValue.disabled = true;
                     runButton.disabled = true;
-                } else {
-                    // Model UI and settings are handled by fetchAndPopulateModels calling updateModelDisplayAndSettings
                 }
                 
-                // Create the initial backend session and frontend session afterwards
                 createNewBackendSession(() => {
-                    startNewFrontendChatSession(true, false); // Don't reset UI settings, as they were just set by model loading
+                    startNewFrontendChatSession(true, false); 
                     promptInput.focus();
-                    renderHistoryList(); // Render history with potentially new session highlighted
+                    renderHistoryList(); 
                 });
             }
 
             async function fetchAndPopulateModels() {
-                console.log("fetchAndPopulateModels called."); // Debug log
                 try {
-                    console.log(`Attempting to fetch from ${API_MODELS_URL}`); // Debug log
                     const response = await fetch(API_MODELS_URL);
-                    console.log("Fetch response received.", response); // Debug log
                     if (!response.ok) {
-                        console.error("Fetch response not OK", response); // Debug log
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
-                    availableModels = await response.json(); // Populates availableModels
-                    console.log("Models fetched:", availableModels); // Debug log
+                    availableModels = await response.json(); 
                     populateModelDropdown(availableModels); 
-                    console.log("Dropdown populated."); // Debug log
                     
                     if (availableModels.length > 0) {
-                        // Select the first model by default or a previously selected one if applicable
-                        // Note: currentChatSession is null here, so it will default to availableModels[0].id
                         const previouslySelectedModelId = currentChatSession?.model || availableModels[0].id;
                         const modelExists = availableModels.some(m => m.id === previouslySelectedModelId);
                         
@@ -919,11 +934,10 @@
                         modelInfoDiv.textContent = "No models available. Check server logs and model directories.";
                         contextWindowSpan.textContent = "-- tokens";
                         runButton.disabled = true;
-                        // Hide all specific settings sections
                         document.querySelectorAll('.model-specific-settings').forEach(div => div.style.display = 'none');
                     }
                 } catch (error) {
-                    console.error("Failed to fetch models:", error); // Debug log
+                    console.error("Failed to fetch models:", error); 
                     modelInfoDiv.textContent = "Error fetching models from server.";
                     runButton.disabled = true;
                 }
@@ -931,20 +945,19 @@
 
             function populateModelDropdown(models) {
                 if (!modelSelect) return;
-                modelSelect.innerHTML = ''; // Clear existing options
+                modelSelect.innerHTML = ''; 
                 models.forEach(model => {
                     const option = document.createElement('option');
                     option.value = model.id;
                     option.textContent = model.name;
                     option.dataset.modelType = model.type;
-                    option.dataset.modelPath = model.path; // Store path for info if needed
-                    // Store all params from backend, this includes defaults and info like n_ctx
+                    option.dataset.modelPath = model.path; 
                     option.dataset.modelParams = JSON.stringify(model.params || {}); 
                     modelSelect.appendChild(option);
                 });
             }
             
-            function updateModelDisplayAndSettings(modelData) { // modelData is an object from availableModels
+            function updateModelDisplayAndSettings(modelData) { 
                 if (!modelData || !modelData.params) {
                     console.warn("updateModelDisplayAndSettings called with invalid modelData", modelData);
                     modelInfoDiv.textContent = "Error: Invalid model data.";
@@ -952,15 +965,13 @@
                 }
 
                 const modelType = modelData.type;
-                const modelParams = modelData.params; // Params from backend for this specific model
+                const modelParams = modelData.params; 
 
-                modelInfoDiv.textContent = `Type: ${modelType}. Path: ${modelData.path}`;
+                modelInfoDiv.textContent = `Type: ${modelType}. Path: ${modelData.path || modelData.repo_id || 'N/A'}`; // Show repo_id if path is missing
                 
                 document.querySelectorAll('.model-specific-settings').forEach(div => div.style.display = 'none');
 
-                // General settings
                 updateTemperatureUI(modelParams.default_temperature !== undefined ? modelParams.default_temperature : DEFAULT_TEMPERATURE);
-
 
                 if (modelType === 'gguf') {
                     ggufSettingsDiv.style.display = 'block';
@@ -971,12 +982,10 @@
                     ggufTopPInput.value = modelParams.default_top_p || JS_DEFAULT_GGUF_TOP_P;
                     ggufRepeatPenaltyInput.value = modelParams.default_repeat_penalty || JS_DEFAULT_GGUF_REPEAT_PENALTY;
                     ggufNGpuLayersInput.value = modelParams.n_gpu_layers_default !== undefined ? modelParams.n_gpu_layers_default : JS_DEFAULT_GGUF_N_GPU_LAYERS;
-                    ggufGrammarInput.value = ''; 
+                    ggufGrammarInput.value = modelParams.default_grammar_str || ''; // Assuming a default might be provided
 
                 } else if (modelType === 'regular') {
                     regularHfSettingsDiv.style.display = 'block';
-                    // Context window for regular HF models is complex to get client-side,
-                    // server could provide it if it inspects model's config.json
                     contextWindowSpan.textContent = modelParams.context_window ? `${modelParams.context_window} tokens` : "Model Defined"; 
                     
                     hfMaxNewTokensInput.value = modelParams.default_max_new_tokens || JS_DEFAULT_HF_MAX_NEW_TOKENS;
@@ -984,14 +993,13 @@
                     hfTopKInput.value = modelParams.default_top_k || JS_DEFAULT_HF_TOP_K;
                     hfTopPInput.value = modelParams.default_top_p || JS_DEFAULT_HF_TOP_P;
                     hfRepetitionPenaltyInput.value = modelParams.default_repetition_penalty || JS_DEFAULT_HF_REPETITION_PENALTY;
-                    hfUseBnb4bitCheckbox.checked = modelParams.supports_bnb_4bit ? false : false; // Default to false even if supported
+                    hfUseBnb4bitCheckbox.checked = modelParams.supports_bnb_4bit ? false : false; 
                     hfTrustRemoteCodeCheckbox.checked = modelParams.trust_remote_code_default !== undefined ? modelParams.trust_remote_code_default : true;
                 } else {
                     contextWindowSpan.textContent = "-- tokens";
                 }
-                // Note: currentChatSession might be null here if this is called during initial model fetch before session is created
                 if (currentChatSession) {
-                    currentChatSession.model = modelData.id; // Keep currentChatSession sync if it exists
+                    currentChatSession.model = modelData.id; 
                 }
             }
 
@@ -1007,8 +1015,6 @@
                         if (callback) callback();
                     } else {
                         console.error("Failed to create backend session:", data.message);
-                        // Add error message to UI, but style it differently if possible (not a chat message)
-                        // For now, using chat message styling with 'error' type
                         addMessageToChatDOM(`Error: Could not start backend session. ${data.message || ''}`, 'ai', 'error');
                     }
                 } catch (error) {
@@ -1046,36 +1052,27 @@
 
             // --- Frontend Chat Session & Local History Management ---
             function createNewFrontendChatObject(id = `chat-${Date.now()}`) {
-                // This function is now called *after* availableModels is declared and potentially populated
-                // It safely accesses availableModels
                 return {
                     id: id, 
                     name: `Chat ${new Date().toLocaleString()}`,
                     systemPrompt: systemPromptInput.value || '',
-                    // Safely access availableModels now
                     model: modelSelect.value || (availableModels.length > 0 ? availableModels[0].id : null), 
                     temperature: parseFloat(temperatureSlider.value) || DEFAULT_TEMPERATURE,
-                    // We will store model-specific params if we want to restore them when loading a chat
-                    // For now, they reset to model defaults when loading a chat.
                     messages: [], 
                     timestamp: Date.now()
                 };
             }
             
-            // `resetUISettings` flag: if false, UI settings (model, temp, etc.) are not reset.
-            // Useful when loading a chat, where we want to apply the chat's saved settings.
             function startNewFrontendChatSession(loadDefaults = true, resetUISettings = true) {
-                currentChatSession = createNewFrontendChatObject(); // This is where the new session object is created
+                currentChatSession = createNewFrontendChatObject(); 
                 if (loadDefaults) {
                     systemPromptInput.value = ''; 
-                    // The model and temperature are set by createNewFrontendChatObject based on current UI state
-                    // No need to explicitly set them here again unless resetting UI is needed
                     if (resetUISettings && availableModels.length > 0) {
-                        const defaultModel = availableModels[0];
+                        const defaultModel = availableModels.find(m => m.id === modelSelect.value) || availableModels[0];
                         modelSelect.value = defaultModel.id;
-                        updateModelDisplayAndSettings(defaultModel); // This also sets temperature based on model default
-                    } else if (resetUISettings) { // No models available
-                        updateTemperatureUI(DEFAULT_TEMPERATURE); // Set general default temp
+                        updateModelDisplayAndSettings(defaultModel); 
+                    } else if (resetUISettings) { 
+                        updateTemperatureUI(DEFAULT_TEMPERATURE); 
                     }
                 }
                 chatOutput.innerHTML = ''; 
@@ -1085,34 +1082,24 @@
                 adjustTextareaHeight(systemPromptInput);
                 updateChatPromptHeader();
                 
-                // Note: createNewBackendSession is now called *before* startNewFrontendChatSession in initializeApp
-                // If this function is called mid-session (e.g. clicking 'New Chat'), it will start a *new* backend session
-                // This is intended behavior for starting a fresh conversation.
-                if (currentBackendSessionId) {
-                    // If we are clicking "New Chat" button, clear current backend memory and get a new session
-                    clearCurrentBackendHistory().then(() => {
+                if (currentBackendSessionId && !resetUISettings) { // If called from initializeApp (resetUISettings is false)
+                    console.log("Initial frontend chat session created, associated with backend session:", currentBackendSessionId);
+                    saveCurrentFrontendChatSession();
+                    renderHistoryList();
+                    promptInput.focus();
+                } else { // Called by "New Chat" button or similar, needs new backend session
+                     clearCurrentBackendHistory().then(() => { // Clear previous if any
                         createNewBackendSession(() => {
-                            console.log("New frontend chat started (from button), associated with new backend session:", currentBackendSessionId);
+                            console.log("New frontend chat started, associated with new backend session:", currentBackendSessionId);
+                            saveCurrentFrontendChatSession(); 
+                            renderHistoryList(); 
                             promptInput.focus();
-                            saveCurrentFrontendChatSession(); // Save the new empty session immediately
-                            renderHistoryList(); // Highlight the new session
                         });
                     }).catch(error => {
-                        console.error("Error clearing backend history before starting new session:", error);
-                        addMessageToChatDOM(`Error starting new chat: Could not clear previous backend session memory. ${error.message}`, 'ai', 'error');
-                    });
-                } else {
-                    // This branch might only be hit if initializeApp failed to create the first session
-                    // or if manually triggered in an odd state.
-                    console.warn("startNewFrontendChatSession called without an active backend session ID. Creating one.");
-                    createNewBackendSession(() => {
-                        console.log("New frontend chat started (fallback), associated with new backend session:", currentBackendSessionId);
-                        promptInput.focus();
-                        saveCurrentFrontendChatSession(); // Save the new empty session immediately
-                        renderHistoryList(); // Highlight the new session
+                        console.error("Error preparing for new chat session:", error);
+                        addMessageToChatDOM(`Error starting new chat. ${error.message}`, 'ai', 'error');
                     });
                 }
-            
             }
 
 
@@ -1121,19 +1108,10 @@
                     console.warn("Attempted to save chat session, but currentChatSession is not valid.");
                     return;
                 }
-                // Don't save empty chats unless they have a system prompt or at least one message.
-                // The welcome message doesn't count as a message.
-                if (currentChatSession.messages.length === 0 && !systemPromptInput.value.trim()) {
-                    // But allow saving the initial empty session if needed to appear in history list immediately after "New Chat"
-                    // Let's rely on the history index logic to decide what gets listed.
-                    // localStorage.removeItem(currentChatSession.id); // Don't save if truly empty? Or save minimum?
-                    // return; 
-                }
 
-                // Update session object with current UI values before saving
                 currentChatSession.systemPrompt = systemPromptInput.value.trim();
                 currentChatSession.model = modelSelect.value;
-                currentChatSession.temperature = parseFloat(temperatureValue.value); // Use value directly from input
+                currentChatSession.temperature = parseFloat(temperatureValue.value); 
                 currentChatSession.timestamp = Date.now(); 
 
                 if (currentChatSession.messages.length > 0 && (currentChatSession.name.startsWith("Chat ") || currentChatSession.name.startsWith("New Chat"))) {
@@ -1141,17 +1119,14 @@
                     if (firstUserMessage && firstUserMessage.text.trim()) {
                         currentChatSession.name = firstUserMessage.text.trim().substring(0, 30) + (firstUserMessage.text.trim().length > 30 ? '...' : '');
                     } else if (currentChatSession.systemPrompt) {
-                        // Use system prompt if no user messages
                         currentChatSession.name = "System: " + currentChatSession.systemPrompt.substring(0, 30) + (currentChatSession.systemPrompt.length > 30 ? '...' : '');
                     } else {
                         currentChatSession.name = `Empty Chat ${new Date(currentChatSession.timestamp).toLocaleDateString()}`;
                     }
                 } else if (currentChatSession.messages.length === 0 && currentChatSession.systemPrompt) {
-                    // Case: only system prompt
                     currentChatSession.name = "System: " + currentChatSession.systemPrompt.substring(0, 30) + (currentChatSession.systemPrompt.length > 30 ? '...' : '');
                 } else if (currentChatSession.messages.length === 0 && !currentChatSession.systemPrompt && currentChatSession.name.startsWith("Chat ")) {
-                    // Case: empty chat with default name, update timestamp but keep default name
-                    currentChatSession.name = `Chat ${new Date(currentChatSession.timestamp).toLocaleString()}`; // Update name slightly
+                    currentChatSession.name = `Chat ${new Date(currentChatSession.timestamp).toLocaleString()}`; 
                 }
 
 
@@ -1162,22 +1137,18 @@
                     indexEntry.name = currentChatSession.name;
                     indexEntry.timestamp = currentChatSession.timestamp;
                 } else {
-                    // Only add to index if it's not just a brand new, empty chat with no system prompt
-                    if (currentChatSession.messages.length > 0 || currentChatSession.systemPrompt.trim()) {
+                    if (currentChatSession.messages.length > 0 || currentChatSession.systemPrompt.trim() || currentChatSession.id === `chat-${new Date(currentChatSession.timestamp).getTime()}`) { // Allow initial empty to be indexed
                         chatHistoryIndex.push({ 
                             id: currentChatSession.id, 
                             name: currentChatSession.name,
                             timestamp: currentChatSession.timestamp 
                         });
-                    } else {
-                        // If it's a new empty chat with no system prompt, don't add to index yet.
-                        // It will be added on the first message.
                     }
                 }
                 chatHistoryIndex.sort((a, b) => b.timestamp - a.timestamp); 
                 localStorage.setItem(CHAT_HISTORY_INDEX_KEY, JSON.stringify(chatHistoryIndex));
                 renderHistoryList(); 
-                updateChatPromptHeader(); // Update header in case name changed
+                updateChatPromptHeader(); 
                 console.log("Frontend chat session saved to localStorage:", currentChatSession.id);
             }
 
@@ -1197,16 +1168,8 @@
                 if (sessionDataString) {
                     const loadedSession = JSON.parse(sessionDataString);
                     
-                    // Start a new frontend session but don't reset UI settings yet,
-                    // and don't create a NEW backend session yet, reuse the current one or create one if none.
-                    // We also don't call createNewFrontendChatObject here, we just assign the loaded data.
-                    
-                    // --- Re-initialize backend session for the loaded chat ---
-                    // It's safer to associate a loaded frontend session with a fresh backend session
-                    // to avoid mixing history from different frontend sessions in one backend session.
                     createNewBackendSession(() => {
-                        // Callback runs after new backend session ID is set
-                        currentChatSession = loadedSession; // Overwrite with loaded data
+                        currentChatSession = loadedSession; 
                         console.log("Loaded frontend chat session:", frontendSessionId, "Associated with new backend session:", currentBackendSessionId);
 
                         systemPromptInput.value = currentChatSession.systemPrompt;
@@ -1214,30 +1177,30 @@
                         const modelInAvailable = availableModels.find(m => m.id === currentChatSession.model);
                         if (modelInAvailable) {
                             modelSelect.value = currentChatSession.model;
-                            updateModelDisplayAndSettings(modelInAvailable); // This sets model-specific UI and temp
-                            // Override temperature if it was saved in the session and differs from model default
+                            updateModelDisplayAndSettings(modelInAvailable); 
                             if (currentChatSession.temperature !== undefined) {
-                            updateTemperatureUI(currentChatSession.temperature);
+                                updateTemperatureUI(currentChatSession.temperature);
                             }
                         } else {
-                            // Model not found, use first available or default
                             console.warn(`Model ${currentChatSession.model} from saved chat not found. Using default.`);
                             if (availableModels.length > 0) {
                                 modelSelect.value = availableModels[0].id;
                                 updateModelDisplayAndSettings(availableModels[0]);
                             } else {
-                                // No models available at all case handled by initializeApp
                                 modelInfoDiv.textContent = "Model not found and no models available.";
                                 runButton.disabled = true;
                             }
-                            // Reset temperature to default or general default if model not found
                             updateTemperatureUI(DEFAULT_TEMPERATURE); 
                         }
 
                         chatOutput.innerHTML = ''; 
                         if (currentChatSession.messages.length > 0) {
                             hideWelcomeMessage();
-                            currentChatSession.messages.forEach(msg => addMessageToChatDOM(msg.text, msg.sender));
+                            currentChatSession.messages.forEach(msg => {
+                                // When loading from history, pass the saved model name for AI messages
+                                const modelNameForDisplay = msg.sender === 'ai' ? (currentChatSession.modelDisplayName || modelSelect.selectedOptions[0]?.textContent) : null;
+                                addMessageToChatDOM(msg.text, msg.sender, 'text', false, modelNameForDisplay);
+                            });
                         } else {
                             renderWelcomeMessage();
                         }
@@ -1247,13 +1210,12 @@
                         updateChatPromptHeader();
                         
                         promptInput.focus();
-                        renderHistoryList(); // Update selection in history list
+                        renderHistoryList(); 
                     });
 
                 } else {
                     console.error("Failed to load frontend chat session:", frontendSessionId, "from localStorage.");
                     alert("Could not load chat session.");
-                    // Optionally, start a new chat if loading failed
                     startNewFrontendChatSession(true, true);
                 }
             }
@@ -1270,19 +1232,18 @@
                 renderHistoryList();
 
                 if (currentChatSession && currentChatSession.id === frontendSessionId) {
-                    startNewFrontendChatSession(true, true); // Start a completely fresh session
+                    startNewFrontendChatSession(true, true); 
                 }
                 console.log("Deleted frontend chat session from localStorage:", frontendSessionId);
             }
 
             function renderHistoryList() { 
                 historyListUL.innerHTML = '';
-                // Filter out empty chats that don't have a system prompt?
                 const sessionsToList = chatHistoryIndex.filter(entry => {
                     const sessionData = localStorage.getItem(entry.id);
-                    if (!sessionData) return false; // Should not happen if index is consistent
+                    if (!sessionData) return false; 
                     const sessionObj = JSON.parse(sessionData);
-                    return sessionObj.messages.length > 0 || sessionObj.systemPrompt.trim();
+                    return sessionObj.messages.length > 0 || sessionObj.systemPrompt.trim() || entry.name.startsWith("Chat "); // List initial empty ones too
                 });
 
                 sessionsToList.forEach(entry => {
@@ -1295,7 +1256,6 @@
 
                     const nameSpan = document.createElement('span');
                     nameSpan.classList.add('history-item-name');
-                    // Use saved name, fallback to default format
                     nameSpan.textContent = entry.name || `Chat ${new Date(entry.timestamp).toLocaleDateString()}`; 
                     nameSpan.title = entry.name || `Chat ${new Date(entry.timestamp).toLocaleDateString()}`;
                     li.appendChild(nameSpan);
@@ -1308,7 +1268,6 @@
                     li.appendChild(deleteBtn);
                     
                     li.onclick = () => {
-                        // Only load if not already selected
                         if (!li.classList.contains('selected-history')) {
                             document.querySelectorAll('.history-item.selected-history').forEach(item => item.classList.remove('selected-history'));
                             li.classList.add('selected-history');
@@ -1329,21 +1288,18 @@
             
             function resetSettingsToDefault() {
                 if (availableModels.length > 0) {
-                    const firstModel = availableModels[0];
-                    modelSelect.value = firstModel.id;
-                    updateModelDisplayAndSettings(firstModel); // This handles all sub-settings
+                    const currentSelectedModel = availableModels.find(m => m.id === modelSelect.value) || availableModels[0];
+                    modelSelect.value = currentSelectedModel.id; // Keep current model selected or default to first
+                    updateModelDisplayAndSettings(currentSelectedModel);
                 } else {
-                    // No models available, set general defaults
                     updateTemperatureUI(DEFAULT_TEMPERATURE);
                     modelInfoDiv.textContent = "No models loaded.";
                     contextWindowSpan.textContent = "-- tokens";
                     document.querySelectorAll('.model-specific-settings').forEach(div => div.style.display = 'none');
                 }
-                systemPromptInput.value = ""; // Also clear system prompt on full reset
+                systemPromptInput.value = ""; 
                 adjustTextareaHeight(systemPromptInput);
                 promptInput.focus();
-                // Does NOT start a new chat session, just resets settings for the *current* chat
-                // saveCurrentFrontendChatSession(); // Optionally save current session state after resetting settings
             }
 
             function renderWelcomeMessage() {
@@ -1358,7 +1314,6 @@
             function adjustTextareaHeight(textarea) {
                 if (textarea) {
                     textarea.style.height = 'auto';
-                    // Use requestAnimationFrame for better rendering performance than setTimeout 0
                     requestAnimationFrame(() => {
                         textarea.style.height = (textarea.scrollHeight) + 'px';
                     });
@@ -1367,36 +1322,31 @@
             
             function updateTemperatureUI(value) {
                 const val = parseFloat(value);
-                // Ensure value is within bounds before updating UI
                 const minTemp = parseFloat(temperatureSlider.min);
                 const maxTemp = parseFloat(temperatureSlider.max);
                 const clampedVal = Math.max(minTemp, Math.min(maxTemp, val));
 
-                temperatureSlider.value = clampedVal.toFixed(2); // Keep precision for slider
-                temperatureValue.value = clampedVal.toFixed(2); // Keep precision for number input
+                temperatureSlider.value = clampedVal.toFixed(2); 
+                temperatureValue.value = clampedVal.toFixed(2); 
                 
-                // Also update the current session object if it exists
                 if(currentChatSession) {
                     currentChatSession.temperature = clampedVal;
                 }
             }
 
-            // Event listeners for adjusting textarea heights
             [promptInput, systemPromptInput].forEach(textarea => {
                 if (textarea) {
                     textarea.addEventListener('input', () => adjustTextareaHeight(textarea));
-                    adjustTextareaHeight(textarea); // Initial adjustment
+                    adjustTextareaHeight(textarea); 
                 }
             });
 
-            // Event listeners for temperature slider and number input
             temperatureSlider.addEventListener('input', (e) => updateTemperatureUI(e.target.value));
             temperatureValue.addEventListener('input', (e) => {
                 let val = parseFloat(e.target.value);
                 if (isNaN(val)) val = DEFAULT_TEMPERATURE;
-                updateTemperatureUI(val); // Validation happens inside updateTemperatureUI
+                updateTemperatureUI(val); 
             });
-            // Add blur listener to number input to re-validate/format after typing
             temperatureValue.addEventListener('blur', (e) => {
                 let val = parseFloat(e.target.value);
                 if (isNaN(val)) val = DEFAULT_TEMPERATURE;
@@ -1409,28 +1359,29 @@
                 const selectedModelData = availableModels.find(m => m.id === modelId);
                 if (selectedModelData) {
                     updateModelDisplayAndSettings(selectedModelData);
-                    // Update model in current session object immediately
                     if(currentChatSession) {
                         currentChatSession.model = modelId;
-                        // Optionally save the session after model change? Or wait for message?
-                        // saveCurrentFrontendChatSession(); 
+                        currentChatSession.modelDisplayName = selectedModelData.name; // Store display name
                     }
                 }
             });
 
-
-            function addMessageToChatDOM(text, sender, type = 'text', isStreaming = false) {
+            // MODIFIED addMessageToChatDOM
+            function addMessageToChatDOM(text, sender, type = 'text', isStreaming = false, modelName = null) {
                 hideWelcomeMessage();
+
+                // Create the main container for the message bubble and model name
+                const messageContainerDiv = document.createElement('div');
+                messageContainerDiv.classList.add('message-container', sender);
+                if (type === 'error') messageContainerDiv.classList.add('error');
+
+
                 const messageDiv = document.createElement('div');
-                messageDiv.classList.add('message', sender);
-                if (type === 'error') messageDiv.classList.add('error');
+                messageDiv.classList.add('message', sender); // Bubble styles
+                if (type === 'error') messageDiv.classList.add('error'); // Bubble error style
                 
                 const contentSpan = document.createElement('span');
-                // Basic Markdown-like link rendering: replace [text](url) with <a href="url" target="_blank">text</a>
-                // This is very rudimentary. For full Markdown, a library would be needed.
-                // Use textContent initially to avoid script injection issues, then render links.
                 contentSpan.textContent = text; 
-                // After setting textContent, replace link patterns safely
                 const linkedHTML = contentSpan.innerHTML.replace(/\[([^\]]+)]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
                 contentSpan.innerHTML = linkedHTML;
                 
@@ -1443,50 +1394,67 @@
                     messageDiv.dataset.streaming = "true"; 
                 }
                 
-                chatOutput.appendChild(messageDiv);
+                messageContainerDiv.appendChild(messageDiv); // Add bubble to container
+
+                // Add model name if sender is AI and modelName is provided
+                if (sender === 'ai' && modelName) {
+                    const modelNameDiv = document.createElement('div');
+                    modelNameDiv.classList.add('message-model-name');
+                    modelNameDiv.textContent = `Model: ${modelName}`;
+                    messageContainerDiv.appendChild(modelNameDiv); // Add model name to container, below bubble
+                }
+                
+                chatOutput.appendChild(messageContainerDiv); // Add the whole container to chat output
                 chatOutput.scrollTop = chatOutput.scrollHeight;
-                return messageDiv; 
+                return messageDiv; // Return the actual message bubble div for streaming updates
             }
 
             function updateStreamingMessage(aiMessageDiv, chunk) {
                 if (aiMessageDiv && aiMessageDiv.dataset.streaming === "true") {
                     const contentSpan = aiMessageDiv.querySelector('span:not(.cursor)');
                     if (contentSpan) {
-                        // Append text chunk first, then re-render links in the *whole* content
                         const currentText = contentSpan.textContent;
                         contentSpan.textContent = currentText + chunk;
-
-                        // Re-render links in the accumulated text
                         const linkedHTML = contentSpan.innerHTML.replace(/\[([^\]]+)]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
                         contentSpan.innerHTML = linkedHTML;
-
                         chatOutput.scrollTop = chatOutput.scrollHeight;
                     }
                 }
             }
 
-            function finalizeStreamingMessage(aiMessageDiv, fullText) {
-                if (aiMessageDiv) { // Check if aiMessageDiv exists (might have been removed on error)
+            // MODIFIED finalizeStreamingMessage
+            function finalizeStreamingMessage(aiMessageDiv, fullText, modelName = null) {
+                if (aiMessageDiv) { 
                     if (aiMessageDiv.dataset.streaming === "true") {
                         const cursor = aiMessageDiv.querySelector('.cursor');
                         if (cursor) cursor.remove();
                         delete aiMessageDiv.dataset.streaming;
 
-                        // Re-render the full text with link parsing one last time
                         const contentSpan = aiMessageDiv.querySelector('span:not(.cursor)');
-                        if (contentSpan && fullText) {
-                            contentSpan.textContent = fullText; // Set full text first
+                        if (contentSpan && fullText !== null && fullText !== undefined) { // Check for null/undefined fullText
+                            contentSpan.textContent = fullText; 
                             const linkedHTML = contentSpan.innerHTML.replace(/\[([^\]]+)]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
                             contentSpan.innerHTML = linkedHTML;
                         }
                     }
+                    // Add/Update model name on the parent container
+                    const messageContainerDiv = aiMessageDiv.parentElement;
+                    if (messageContainerDiv && messageContainerDiv.classList.contains('message-container') && modelName) {
+                        let modelNameDiv = messageContainerDiv.querySelector('.message-model-name');
+                        if (!modelNameDiv) { // If somehow not created during streaming placeholder
+                            modelNameDiv = document.createElement('div');
+                            modelNameDiv.classList.add('message-model-name');
+                            messageContainerDiv.appendChild(modelNameDiv);
+                        }
+                        modelNameDiv.textContent = `Model: ${modelName}`;
+                    }
                 }
             }
 
+            // MODIFIED handleRunPrompt
             const handleRunPrompt = async () => {
                 if (!currentBackendSessionId) {
                     addMessageToChatDOM("Error: No active backend session. Please try creating a new chat or reloading.", 'ai', 'error');
-                    // Attempt to create a new session and then prompt the user to try again
                     await createNewBackendSession(() => {
                         if(currentBackendSessionId) {
                             addMessageToChatDOM("New backend session started. Please try your prompt again.", 'ai', 'error');
@@ -1500,42 +1468,40 @@
                     promptInput.focus();
                     return;
                 }
-                if (modelSelect.value === "" || !modelSelect.value) {
+                
+                const selectedModelOption = modelSelect.selectedOptions[0];
+                if (!selectedModelOption || !selectedModelOption.value) {
                     addMessageToChatDOM("Error: No model selected. Please choose a model from settings.", 'ai', 'error');
                     return;
                 }
+                const modelId = selectedModelOption.value;
+                const modelDisplayName = selectedModelOption.textContent; // Get the display name
 
-                // Save the state *before* adding the user message to the DOM and session
-                // This ensures the prompt is saved with the correct state and settings
+
                 saveCurrentFrontendChatSession(); 
 
-                // Add user message to DOM and session history
-                addMessageToChatDOM(userPromptText, 'user');
+                addMessageToChatDOM(userPromptText, 'user'); // User message doesn't get model name
                 currentChatSession.messages.push({ sender: 'user', text: userPromptText });
+                currentChatSession.modelDisplayName = modelDisplayName; // Store model name for this session for history loading
                 
-                // Update chat name based on first user message if it's still default
                 if (currentChatSession.messages.filter(m => m.sender === 'user').length === 1 && currentChatSession.name.startsWith("Chat ")) {
                     currentChatSession.name = userPromptText.substring(0, 30) + (userPromptText.length > 30 ? '...' : '');
                     updateChatPromptHeader(); 
                 }
 
 
-                // Clear input and disable button
                 promptInput.value = '';
                 adjustTextareaHeight(promptInput);
                 runButton.disabled = true;
 
-                // Add placeholder AI message
-                let aiMessageDiv = addMessageToChatDOM("", 'ai', 'text', true); 
+                // Pass modelDisplayName to addMessageToChatDOM for the AI placeholder
+                let aiMessageDiv = addMessageToChatDOM("", 'ai', 'text', true, modelDisplayName); 
                 let fullAiResponseText = "";
 
-                // --- Collect parameters for the backend ---
-                const selectedOption = modelSelect.selectedOptions[0];
-                const modelType = selectedOption.dataset.modelType;
+                const modelType = selectedModelOption.dataset.modelType;
                 let modelSpecificParams = {};
                 let modelLoadParams = {}; 
 
-                // Get model-specific generation parameters from UI
                 if (modelType === 'gguf') {
                     modelSpecificParams = {
                         max_tokens: parseInt(ggufMaxTokensInput.value) || JS_DEFAULT_GGUF_MAX_TOKENS,
@@ -1544,10 +1510,8 @@
                         repeat_penalty: parseFloat(ggufRepeatPenaltyInput.value) || JS_DEFAULT_GGUF_REPEAT_PENALTY,
                         grammar_str: ggufGrammarInput.value.trim() || null,
                     };
-                    // Get model-specific load parameters from UI (affecting which instance is loaded/cached)
                     modelLoadParams = { 
                         n_gpu_layers: parseInt(ggufNGpuLayersInput.value), 
-                        // n_ctx is generally considered a model property set on load, not per-request
                     };
                 } else if (modelType === 'regular') {
                     modelSpecificParams = {
@@ -1560,7 +1524,6 @@
                     modelLoadParams = { 
                         use_bnb_4bit: hfUseBnb4bitCheckbox.checked,
                         trust_remote_code: hfTrustRemoteCodeCheckbox.checked,
-                        // torch_dtype_str could also be a load param
                     };
                 }
 
@@ -1568,8 +1531,8 @@
                     session_id: currentBackendSessionId, 
                     prompt: userPromptText,
                     system_prompt: systemPromptInput.value.trim(),
-                    model_id: modelSelect.value,
-                    temperature: parseFloat(temperatureValue.value), // Use value from UI input
+                    model_id: modelId, // Use modelId from selectedOption
+                    temperature: parseFloat(temperatureValue.value), 
                     model_specific_params: modelSpecificParams,
                     model_load_params: modelLoadParams 
                 };
@@ -1582,13 +1545,10 @@
                     });
 
                     if (!response.ok) {
-                        // If the fetch itself fails (e.g., 500 error before streaming starts)
-                        // Finalize the potential empty streaming message
-                        finalizeStreamingMessage(aiMessageDiv, fullAiResponseText); 
-                        // Remove the empty streaming message if no content was added
+                        finalizeStreamingMessage(aiMessageDiv, fullAiResponseText, modelDisplayName); 
                         if (!fullAiResponseText.trim() && aiMessageDiv) {
-                            aiMessageDiv.remove(); 
-                            aiMessageDiv = null; // Clear reference
+                            aiMessageDiv.parentElement.remove(); // Remove the whole container
+                            aiMessageDiv = null; 
                         }
 
                         const errorText = await response.text();
@@ -1596,18 +1556,15 @@
                         try { errorData = JSON.parse(errorText); } catch (e) { errorData.error = errorText; }
                         
                         const errorMessage = errorData.error || `HTTP error! status: ${response.status}`;
-                        addMessageToChatDOM(errorMessage, 'ai', 'error');
-                        // Add error to session history
+                        addMessageToChatDOM(errorMessage, 'ai', 'error', false, modelDisplayName); // Pass model name for error
                         currentChatSession.messages.push({ sender: 'ai', text: `Error: ${errorMessage}` });
-                        saveCurrentFrontendChatSession(); // Save the session with the error message
-                        throw new Error(errorMessage); // Re-throw to log it
+                        saveCurrentFrontendChatSession(); 
+                        throw new Error(errorMessage); 
                     }
 
-                    // Handle streaming response
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
 
-                    // Stream handling loop
                     while (true) {
                         const { value, done } = await reader.read();
                         if (done) break;
@@ -1619,58 +1576,46 @@
                                     const jsonData = JSON.parse(line.substring(5).trim());
                                     if (jsonData.error) {
                                         console.error("Stream error from backend:", jsonData.error);
-                                        // Append error chunk to the streamed text
                                         const errorChunk = `\n[Error: ${jsonData.error}]`;
                                         fullAiResponseText += errorChunk; 
                                         updateStreamingMessage(aiMessageDiv, errorChunk); 
-                                        // If it's a final error from stream, stop processing
                                         if(jsonData.is_final) {
-                                            // Mark the message div as error if it's still streaming and not already an error
                                             if (aiMessageDiv && aiMessageDiv.dataset.streaming === "true" && !aiMessageDiv.classList.contains('error')) {
                                                 aiMessageDiv.classList.add('error');
                                             }
-                                            break; // Break from sseLines loop
+                                            break; 
                                         }
                                     } else if (jsonData.text_chunk) {
                                         fullAiResponseText += jsonData.text_chunk;
-                                        updateStreamingMessage(aiMessageDiv, jsonData.text_chunk); // Stream visual update
+                                        updateStreamingMessage(aiMessageDiv, jsonData.text_chunk); 
                                     }
                                     if (jsonData.is_final) {
-                                        // If backend provides a final full_response, prefer it.
-                                        // This can happen if backend does post-processing or error aggregation.
-                                        // Ensure the final text includes any error chunks added during streaming
                                         const finalContent = jsonData.full_response || fullAiResponseText; 
-                                        // Check if an error occurred during streaming and add a final note if not already in full text
                                         if (aiMessageDiv && aiMessageDiv.classList.contains('error') && !finalContent.includes("[Error:")) {
-                                            fullAiResponseText += "\n[Generation finished with errors during streaming]";
+                                            fullAiResponseText = (fullAiResponseText || "") + "\n[Generation finished with errors during streaming]";
                                         } else {
                                             fullAiResponseText = finalContent;
                                         }
 
-                                        finalizeStreamingMessage(aiMessageDiv, fullAiResponseText); // Final render with full text
+                                        finalizeStreamingMessage(aiMessageDiv, fullAiResponseText, modelDisplayName); // Pass model name
                                         currentChatSession.messages.push({ sender: 'ai', text: fullAiResponseText });
-                                        saveCurrentFrontendChatSession(); // Save after successful response
-                                        break; // Break from sseLines loop
+                                        saveCurrentFrontendChatSession(); 
+                                        break; 
                                     }
                                 } catch (e) {
                                     console.warn("Error parsing SSE JSON:", e, "Line:", line);
-                                    // Append a parsing error indicator to the streamed text
                                     const parseErrorChunk = `\n[JSON Parse Error: ${e.message}]`;
                                     fullAiResponseText += parseErrorChunk;
                                     updateStreamingMessage(aiMessageDiv, parseErrorChunk);
-                                    // Mark message as error
                                     if (aiMessageDiv && !aiMessageDiv.classList.contains('error')) {
                                         aiMessageDiv.classList.add('error');
                                     }
                                 }
                             }
                         }
-                        // Check if streaming has ended by the 'is_final: true' flag
                         if (document.querySelector('[data-streaming="true"]') === null && fullAiResponseText.trim()) {
-                            // If streaming element was removed (e.g., by finalize) and we have content, break main loop
                             break;
                         }
-                        // If the loop finished without a 'is_final' flag (e.g., stream closed unexpectedly)
                         if (done && document.querySelector('[data-streaming="true"]') !== null) {
                             console.warn("Stream ended unexpectedly without is_final flag.");
                             const unexpectedEndChunk = "\n[Stream ended unexpectedly]";
@@ -1679,43 +1624,32 @@
                             if (aiMessageDiv && !aiMessageDiv.classList.contains('error')) {
                                 aiMessageDiv.classList.add('error');
                             }
-                            finalizeStreamingMessage(aiMessageDiv, fullAiResponseText);
+                            finalizeStreamingMessage(aiMessageDiv, fullAiResponseText, modelDisplayName); // Pass model name
                             currentChatSession.messages.push({ sender: 'ai', text: fullAiResponseText });
                             saveCurrentFrontendChatSession();
-                            break; // Break from while(true)
+                            break; 
                         }
-
                     }
-
                 } catch (error) {
-                    // This catch block handles errors during fetch setup or initial response,
-                    // or errors during stream reading that weren't caught and yielded as SSE errors.
                     console.error('Fetch/Stream Error:', error);
+                    finalizeStreamingMessage(aiMessageDiv, fullAiResponseText, modelDisplayName); // Pass model name
                     
-                    // Ensure the message div is finalized or removed on error
-                    finalizeStreamingMessage(aiMessageDiv, fullAiResponseText);
-                    
-                    // If the message div is still empty after error, remove it.
                     if (aiMessageDiv && (!fullAiResponseText || !fullAiResponseText.trim())) {
-                        aiMessageDiv.remove(); 
+                        aiMessageDiv.parentElement.remove(); // Remove container
                         aiMessageDiv = null;
-                        addMessageToChatDOM(`Error: ${error.message}`, 'ai', 'error');
+                        addMessageToChatDOM(`Error: ${error.message}`, 'ai', 'error', false, modelDisplayName); // Pass model name
                         currentChatSession.messages.push({ sender: 'ai', text: `Error: ${error.message}` });
                     } else if (aiMessageDiv) { 
-                        // If some text was streamed, mark it as error and append error message
                         if (!aiMessageDiv.classList.contains('error')) aiMessageDiv.classList.add('error'); 
                         const finalErrorChunk = `\n[Final Processing Error: ${error.message}]`;
-                        updateStreamingMessage(aiMessageDiv, finalErrorChunk); // Append error visually
-                        fullAiResponseText += finalErrorChunk; // Add to stored text
+                        updateStreamingMessage(aiMessageDiv, finalErrorChunk); 
+                        fullAiResponseText = (fullAiResponseText || "") + finalErrorChunk;
                         currentChatSession.messages.push({ sender: 'ai', text: fullAiResponseText });
                     } else {
-                        // If aiMessageDiv was somehow null or removed, just add a new error message
-                        addMessageToChatDOM(`Error: ${error.message}`, 'ai', 'error');
+                        addMessageToChatDOM(`Error: ${error.message}`, 'ai', 'error', false, modelDisplayName); // Pass model name
                         currentChatSession.messages.push({ sender: 'ai', text: `Error: ${error.message}` });
                     }
-                    
-                    saveCurrentFrontendChatSession(); // Save the session with the final error state
-
+                    saveCurrentFrontendChatSession(); 
                 } finally {
                     runButton.disabled = false;
                     promptInput.focus();
@@ -1727,14 +1661,14 @@
                 rightSettingsSidebar.classList.remove('hidden-view');
                 historyPanelDisplay.style.display = 'none';
                 promptInput.focus();
-                renderHistoryList(); // Ensure history list selection is updated
+                renderHistoryList(); 
             }
 
             function switchToHistoryView() {
                 mainChatContent.classList.add('hidden-view');
                 rightSettingsSidebar.classList.add('hidden-view');
                 historyPanelDisplay.style.display = 'block';
-                renderHistoryList(); // Ensure history list is up-to-date
+                renderHistoryList(); 
             }
 
             function handleNavClick(navItem) {
@@ -1748,14 +1682,12 @@
                 } else {
                     let featureName = navItem.textContent.replace(/<span class="icon">.*?<\/span>/i, '').trim();
                     alert(`The "${featureName}" interface is not yet implemented.`);
-                    // Revert to chat view and active status
                     switchToChatView(); 
                     document.querySelectorAll('.left-sidebar nav li.active').forEach(li => li.classList.remove('active'));
                     navChat.classList.add('active'); 
                 }
             }
 
-            // Event listeners for buttons and keyboard shortcuts
             if (newChatBtn) newChatBtn.addEventListener('click', () => startNewFrontendChatSession(true, true));
             if (clearBackendHistoryBtn) clearBackendHistoryBtn.addEventListener('click', clearCurrentBackendHistory);
             if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', () => { resetSettingsToDefault(); });
@@ -1769,32 +1701,24 @@
                 } else if (event.ctrlKey && (event.key === 'n' || event.key === 'N')) { 
                     event.preventDefault();
                     startNewFrontendChatSession(true, true);
-                } else if (event.key === 'Escape' && runButton && runButton.disabled) {
-                    // Future: Implement cancellation logic
-                    // alert("Cancellation not yet implemented.");
                 }
             });
             
-            // Listeners for suggestion buttons
             suggestionButtons.forEach(button => {
                 button.addEventListener('click', () => {
                     promptInput.value = button.textContent;
                     adjustTextareaHeight(promptInput);
                     promptInput.focus();
-                    // Optionally, uncomment to directly run after clicking suggestion
-                    // handleRunPrompt(); 
                 });
             });
             
-            // Listeners for navigation links
             [navChat, navHistory, navSTT, navTTS].forEach(navItem => {
                 if (navItem) {
                     navItem.addEventListener('click', () => handleNavClick(navItem));
                 }
             });
 
-            console.log("DOMContentLoaded end. Calling initializeApp..."); // Debug log
-            initializeApp(); // Call the async init function
+            initializeApp(); 
         });
     </script>
 </body>
