@@ -62,7 +62,7 @@ def load_regular_model(
                 f"dtype={torch_dtype_str}, 4bit={use_bnb_4bit}, trust_remote_code={trust_remote_code}")
 
     actual_torch_dtype = get_torch_dtype(torch_dtype_str)
-    quantization_config_obj = None # Renamed from quantization_config to avoid confusion
+    quantization_config_obj = None 
     if use_bnb_4bit:
         compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() and actual_torch_dtype == torch.bfloat16 else torch.float16
         quantization_config_obj = BitsAndBytesConfig(
@@ -84,12 +84,9 @@ def load_regular_model(
             "device_map": device_map,
             "trust_remote_code": trust_remote_code, 
             "torch_dtype": actual_torch_dtype,
-            **kwargs # Pass any other kwargs from the function signature
+            **kwargs 
         }
         
-        # Only add quantization_config to pipeline_load_args if it's actually configured.
-        # This prevents `quantization_config=None` from being passed and potentially stored
-        # in a way that interferes with generation parameters.
         if quantization_config_obj:
             pipeline_load_args["quantization_config"] = quantization_config_obj
         
@@ -134,14 +131,13 @@ def generate_regular_chat_stream(
 
     converted_messages = convert_messages_to_hf_format(messages)
     
-    # Handle temperature and do_sample logic
     current_do_sample = do_sample
     current_temperature = temperature
     current_top_k = top_k
     current_top_p = top_p
 
-    if current_temperature < MIN_TEMP_FOR_SAMPLING:
-        if current_do_sample:
+    if current_temperature < MIN_TEMP_FOR_SAMPLING: 
+        if current_do_sample: 
             logger.warning(
                 f"Temperature is {current_temperature} (not strictly positive). "
                 f"Forcing do_sample=False for greedy decoding, as requested temperature is too low for sampling."
@@ -155,9 +151,10 @@ def generate_regular_chat_stream(
     
     logger.info(
         f"Generating Regular HF stream. Msgs: {len(converted_messages)}, "
-        f"Temp: {current_temperature if current_do_sample else 'N/A (Greedy)'}, "
+        f"Temp: {current_temperature if current_do_sample else 'N/A (Greedy)'}, " 
         f"DoSample: {current_do_sample}, MaxNewTokens: {max_new_tokens}"
     )
+
 
     if pipe_instance.tokenizer.chat_template is None:
         logger.warning(f"Tokenizer for {pipe_instance.model.name_or_path} does not have a chat_template. "
@@ -181,8 +178,8 @@ def generate_regular_chat_stream(
         "do_sample": current_do_sample,
         "repetition_penalty": repetition_penalty,
         "streamer": streamer,
-        "return_full_text": False,
-        "quantization_config": None, # <--- ADDED THIS LINE
+        "return_full_text": False, 
+        "quantization_config": None, # Added in previous fix
     }
 
     for k, v in kwargs.items():
@@ -190,28 +187,47 @@ def generate_regular_chat_stream(
             generation_kwargs[k] = v
     
     eos_token_str = pipe_instance.tokenizer.eos_token
-    if not eos_token_str:
+    if not eos_token_str: 
         logger.debug(f"EOS token not explicitly defined for tokenizer {pipe_instance.tokenizer.name_or_path}. Manual stripping might be less effective.")
+    else:
+        logger.debug(f"EOS token for {pipe_instance.tokenizer.name_or_path} is: '{eos_token_str}'")
+
 
     thread = Thread(target=pipe_instance, args=(input_for_pipeline,), kwargs=generation_kwargs)
     thread.start()
 
     try:
         full_response_text = ""
+        first_chunk_processed = False # Flag to check the very first non-empty chunk
         for new_text_chunk in streamer:
-            if new_text_chunk:
+            if new_text_chunk: # Process only non-empty chunks
                 cleaned_chunk = new_text_chunk
+
                 if eos_token_str:
-                    if cleaned_chunk == eos_token_str:
-                        cleaned_chunk = "" 
-                    elif cleaned_chunk.endswith(eos_token_str):
-                        cleaned_chunk = cleaned_chunk[:-len(eos_token_str)]
+                    # Handle leading EOS token only for the very first non-empty chunk
+                    if not first_chunk_processed and cleaned_chunk.startswith(eos_token_str):
+                        logger.debug(f"Stripping leading EOS token ('{eos_token_str}') from first chunk: '{cleaned_chunk}'")
+                        cleaned_chunk = cleaned_chunk[len(eos_token_str):]
+                    
+                    # Handle trailing EOS token (can happen in any chunk, especially the last)
+                    # Also handle if the cleaned_chunk (after potential leading strip) IS the EOS token
+                    if cleaned_chunk.endswith(eos_token_str):
+                        if cleaned_chunk == eos_token_str: # Chunk was only the EOS token (or became so)
+                            logger.debug(f"Stripping full EOS token chunk: '{new_text_chunk}' -> became just EOS")
+                            cleaned_chunk = "" 
+                        else: # EOS is at the end of a longer chunk
+                            logger.debug(f"Stripping trailing EOS token from chunk: '{new_text_chunk}'")
+                            cleaned_chunk = cleaned_chunk[:-len(eos_token_str)]
                 
                 if cleaned_chunk: 
                     full_response_text += cleaned_chunk
                     yield cleaned_chunk
+                
+                if not first_chunk_processed: # Mark after processing the first non-empty chunk's content
+                    first_chunk_processed = True
 
-        thread.join(timeout=kwargs.get("thread_join_timeout", 60))
+
+        thread.join(timeout=kwargs.get("thread_join_timeout", 60)) 
         if thread.is_alive():
             logger.warning(f"Generation thread for {pipe_instance.model.name_or_path} did not finish in time.")
 
