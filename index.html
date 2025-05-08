@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Local AI Studio</title>
+    <style>
+        /* --- MODERN STYLES (Same as your provided CSS) --- */
+        :root {
+            --primary-color: #1976D2; /* Blue 700 */
+            --primary-color-light: #64B5F6; /* Blue 300 */
+            --primary-color-dark: #0D47A1; /* Blue 900 */
+            --accent-color: #4CAF50; /* Green 500 */
+            
+            --background-main: #ECEFF1; /* Blue Grey 50 */
+            --background-card: #FFFFFF;
+            --background-input: #F5F7FA; /* Lighter than main, for inputs */
+            --background-hover: #E3F2FD; /* Blue 50 */
+            --background-active-nav: #BBDEFB; /* Blue 100 */
+
+            --text-primary: #263238; /* Blue Grey 900 */
+            --text-secondary: #546E7A; /* Blue Grey 600 */
+            --text-light: #FFFFFF;
+            --text-on-primary-active: var(--primary-color);
+
+            --border-color: #CFD8DC; /* Blue Grey 100 */
+            --border-color-strong: #B0BEC5; /* Blue Grey 200 */
+            --border-focus: var(--primary-color);
+
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.16);
+            --shadow-md: 0 3px 6px rgba(0,0,0,0.12), 0 3px 6px rgba(0,0,0,0.20);
+            --font-family: 'Roboto', 'Noto Sans', sans-serif;
+            --border-radius-sm: 4px;
+            --border-radius-md: 8px;
+            --border-radius-lg: 18px; /* For chat bubbles/pills */
+            --transition-speed: 0.2s ease;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #B0BEC5; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #90A4AE; 
+        }
+
+        body {
+            font-family: var(--font-family);
+            margin: 0;
+            background-color: var(--background-main);
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Left Sidebar */
+        .left-sidebar {
+            width: 250px; 
+            background-color: var(--background-card);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            transition: width var(--transition-speed);
+        }
+
+        .left-sidebar .logo {
+            font-size: 1.6em; 
+            font-weight: 700; 
+            color: var(--primary-color);
+            margin-bottom: 30px;
+            padding: 10px 0;
+            text-align: center; 
+        }
+
+        .left-sidebar nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .left-sidebar nav li {
+            padding: 12px 16px; 
+            margin-bottom: 8px; 
+            border-radius: var(--border-radius-md);
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 500; 
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+            color: var(--text-secondary);
+            transition: background-color var(--transition-speed), color var(--transition-speed);
+        }
+        .left-sidebar nav li .icon {
+            margin-right: 16px; 
+            font-size: 1.3em; 
+            min-width: 24px; 
+            text-align: center;
+        }
+
+        .left-sidebar nav li:hover {
+            background-color: var(--background-hover);
+            color: var(--primary-color);
+        }
+
+        .left-sidebar nav li.active {
+            background-color: var(--background-active-nav);
+            color: var(--text-on-primary-active);
+            font-weight: 600;
+        }
+        .left-sidebar nav li.active .icon {
+             color: var(--primary-color);
+        }
+
+        .history-panel {
+            padding-top: 16px;
+            flex-grow: 1;
+            overflow-y: auto;
+            display: none;
+            margin-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+        .history-panel h4 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            padding: 0 8px; 
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .history-item {
+            padding: 10px 12px;
+            margin-bottom: 4px;
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            font-size: 0.88em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border: 1px solid transparent;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-secondary);
+            transition: background-color var(--transition-speed), border-color var(--transition-speed);
+        }
+        .history-item:hover {
+            background-color: var(--background-hover);
+        }
+        .history-item.selected-history {
+            background-color: var(--background-active-nav);
+            border-color: var(--primary-color-light);
+            color: var(--text-on-primary-active);
+        }
+        .history-item-name {
+            flex-grow: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-item-delete {
+            background: none;
+            border: none;
+            color: #E57373; 
+            font-size: 1.1em; 
+            padding: 2px 4px;
+            cursor: pointer;
+            opacity: 0.7;
+            margin-left: 8px;
+            transition: opacity var(--transition-speed), color var(--transition-speed);
+        }
+        .history-item-delete:hover {
+            opacity: 1;
+            color: #D32F2F; 
+        }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--background-main); 
+            padding: 0; 
+            overflow-y: auto;
+        }
+        .main-content.hidden-view { display: none; }
+
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px; 
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--background-card); 
+            box-shadow: var(--shadow-sm);
+            position: sticky;
+            top: 0;
+            z-index: 100; 
+        }
+
+        .main-header h2 {
+            margin: 0;
+            font-size: 1.35em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .main-header-actions .icon-btn, #clear-backend-history-btn {
+            background: none;
+            border: none;
+            font-size: 1.4em; 
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 8px;
+            margin-left: 12px;
+            border-radius: 50%; 
+            transition: background-color var(--transition-speed), color var(--transition-speed);
+        }
+        #clear-backend-history-btn { 
+            font-size: 0.85em;
+            padding: 8px 16px;
+            border-radius: var(--border-radius-lg);
+            background-color: var(--background-input);
+            border: 1px solid var(--border-color);
+            font-weight: 500;
+        }
+        #clear-backend-history-btn:hover {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .main-header-actions .icon-btn:hover:not(:disabled) {
+            background-color: var(--background-hover);
+            color: var(--primary-color);
+        }
+        .main-header-actions .icon-btn:disabled {
+            color: var(--border-color-strong);
+            cursor: not-allowed;
+        }
+        .main-header-actions .icon-btn:disabled:hover {
+            background-color: transparent;
+        }
+
+        .chat-interface {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 24px; 
+        }
+
+        #chat-output {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 0; 
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px; 
+        }
+        .welcome-message {
+            text-align: center;
+            margin: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: var(--text-secondary);
+        }
+        .welcome-message h1 {
+            font-size: 2.8em;
+            font-weight: 300; 
+            color: var(--primary-color);
+            margin-bottom: 16px;
+        }
+         .welcome-message p { 
+            font-size: 1.1em;
+            max-width: 500px;
+            line-height: 1.6;
+        }
+
+        .message {
+            padding: 12px 18px;
+            border-radius: var(--border-radius-lg); 
+            margin-bottom: 12px;
+            max-width: 75%; 
+            word-wrap: break-word;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.1s ease-out; 
+        }
+        .message:hover {
+            transform: translateY(-1px);
+        }
+
+        .message.user {
+            background-color: var(--primary-color);
+            color: var(--text-light);
+            align-self: flex-end;
+            margin-left: auto;
+            border-bottom-right-radius: var(--border-radius-sm); 
+        }
+        .message.ai {
+            background-color: var(--background-card);
+            color: var(--text-primary);
+            align-self: flex-start;
+            margin-right: auto;
+            border: 1px solid var(--border-color);
+            border-bottom-left-radius: var(--border-radius-sm); 
+        }
+        .message.error {
+            background-color: #FFCDD2; 
+            color: #D32F2F; 
+            align-self: center;
+            text-align: center;
+            max-width: 90%;
+            border: 1px solid #E57373; 
+        }
+        .message.loading { 
+            font-style: italic;
+            color: var(--text-secondary);
+            align-self: flex-start;
+            background-color: transparent;
+            box-shadow: none;
+            border: none;
+        }
+        .message.ai .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 1.2em;
+            background-color: var(--text-primary);
+            animation: blink 1s step-end infinite;
+            margin-left: 3px;
+            vertical-align: text-bottom;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .system-prompt-container {
+            margin: 0 auto 16px auto;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        #system-prompt-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            font-size: 0.95em;
+            line-height: 1.5;
+            min-height: 60px;
+            max-height: 150px;
+            resize: vertical;
+            box-sizing: border-box;
+            background-color: var(--background-input);
+            color: var(--text-primary);
+            font-family: inherit;
+            transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+        }
+        #system-prompt-input::placeholder { color: var(--text-secondary); opacity: 0.7; }
+        #system-prompt-input:focus {
+            outline: none;
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2); 
+            background-color: var(--background-card);
+        }
+
+        .prompt-suggestions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .suggestion-btn {
+            background-color: var(--background-card);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: var(--border-radius-lg); 
+            cursor: pointer;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: background-color var(--transition-speed), color var(--transition-speed), box-shadow var(--transition-speed);
+        }
+        .suggestion-btn:hover {
+            background-color: var(--background-hover);
+            color: var(--primary-color);
+            border-color: var(--primary-color-light);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .prompt-input-area {
+            display: flex;
+            align-items: flex-end; 
+            border: 1px solid var(--border-color-strong);
+            border-radius: var(--border-radius-lg); 
+            padding: 8px 8px 8px 16px; 
+            background-color: var(--background-card);
+            margin: 0 auto;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: var(--shadow-md);
+            transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+        }
+        .prompt-input-area:focus-within {
+            border-color: var(--border-focus);
+            box-shadow: var(--shadow-md), 0 0 0 2px rgba(25, 118, 210, 0.2);
+        }
+
+        #prompt-input {
+            flex-grow: 1;
+            border: none;
+            outline: none;
+            padding: 10px 0; 
+            font-size: 1em;
+            resize: none;
+            background-color: transparent;
+            min-height: 24px; 
+            max-height: 150px; 
+            overflow-y: auto;
+            color: var(--text-primary);
+            line-height: 1.5; 
+        }
+        #prompt-input::placeholder { color: var(--text-secondary); opacity: 0.7; }
+
+        #run-button {
+            background-color: var(--primary-color);
+            color: var(--text-light);
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--border-radius-md); 
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            margin-left: 10px;
+            transition: background-color var(--transition-speed), box-shadow var(--transition-speed);
+            box-shadow: var(--shadow-sm);
+        }
+        #run-button .shortcut { font-size: 0.8em; opacity: 0.8; margin-left: 5px; }
+        #run-button:hover:not(:disabled) {
+            background-color: var(--primary-color-dark);
+            box-shadow: var(--shadow-md);
+        }
+        #run-button:disabled {
+            background-color: var(--primary-color-light);
+            cursor: not-allowed;
+            opacity: 0.7;
+            box-shadow: none;
+        }
+
+        /* Right Sidebar */
+        .right-sidebar {
+            width: 320px; 
+            background-color: var(--background-card);
+            padding: 20px;
+            border-left: 1px solid var(--border-color);
+            overflow-y: auto;
+            font-size: 0.9em;
+            box-shadow: var(--shadow-sm);
+            transition: width var(--transition-speed);
+        }
+        .right-sidebar.hidden-view { display: none; }
+
+        .right-sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .right-sidebar-header h3 {
+            margin: 0;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 1.15em;
+        }
+        .icon-btn-sm {
+            background: none;
+            border: none;
+            font-size: 1.3em;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 50%;
+            transition: background-color var(--transition-speed), color var(--transition-speed);
+        }
+        .icon-btn-sm:hover:not(:disabled) {
+            background-color: var(--background-hover);
+            color: var(--primary-color);
+        }
+        .icon-btn-sm:disabled { color: var(--border-color-strong); cursor: not-allowed; }
+        .icon-btn-sm:disabled:hover { background-color: transparent; }
+
+        .settings-section {
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-section:last-child { border-bottom: none; padding-bottom: 0; }
+        
+        .settings-section h4 { /* For GGUF/HF specific titles */
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.95em; /* Slightly larger than old h4 */
+            /* text-transform: uppercase; */ /* Optional: if you want uppercase */
+            letter-spacing: 0.2px;
+        }
+
+        #model-select, .settings-section input[type="number"], .settings-section input[type="text"], .settings-section textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: var(--border-radius-md);
+            border: 1px solid var(--border-color-strong);
+            background-color: var(--background-input);
+            font-size: 0.9em;
+            color: var(--text-primary);
+            box-sizing: border-box; 
+            transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+        }
+        #model-select:focus, .settings-section input[type="number"]:focus, .settings-section input[type="text"]:focus, .settings-section textarea:focus {
+            outline: none;
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+            background-color: var(--background-card);
+        }
+        .settings-section textarea { /* Specific for gguf-grammar */
+            min-height: 60px;
+            font-family: var(--font-family);
+            resize: vertical;
+        }
+
+
+        .model-info-text {
+            font-size: 0.8em; 
+            color: var(--text-secondary);
+            padding: 10px;
+            margin-top: 8px; 
+            margin-bottom: 16px;
+            line-height: 1.5;
+            background-color: var(--background-input);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--border-color);
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+        .setting-item.column-layout { /* For labels above inputs like textarea */
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .setting-item.column-layout label {
+            margin-bottom: 6px;
+        }
+
+        .setting-item:last-child { margin-bottom: 0; }
+        .setting-item label {
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-right: 10px; 
+            flex-shrink: 0; /* Prevent label from shrinking too much */
+        }
+         .setting-item input[type="checkbox"] {
+            margin-left: auto; /* Pushes checkbox to the right */
+            height: 18px;
+            width: 18px;
+            cursor: pointer;
+        }
+
+
+        #temperature { /* Range slider */
+            flex-grow: 1;
+            margin: 0 10px;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            outline: none;
+        }
+        #temperature::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid var(--background-card); 
+            box-shadow: var(--shadow-sm);
+        }
+        #temperature::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid var(--background-card);
+            box-shadow: var(--shadow-sm);
+        }
+        #temperature-value { /* This is an input type number now */
+            width: 70px; /* Wider for better look and step="0.01" */
+            padding: 8px;
+            text-align: center;
+            margin-left: 0; 
+            /* Inherits general input styling now */
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="left-sidebar">
+            <div class="logo" id="app-logo">My Local AI Studio</div>
+            <nav>
+                <ul>
+                    <li class="active" id="nav-chat"><span class="icon">💬</span> Chat</li>
+                    <li id="nav-history"><span class="icon">📜</span> History</li>
+                    <li id="nav-stt" title="Coming Soon!"><span class="icon">🎤</span> Speech-to-Text</li>
+                    <li id="nav-tts" title="Coming Soon!"><span class="icon">🗣️</span> Text-to-Speech</li>
+                </ul>
+            </nav>
+            <div class="history-panel" id="history-panel-display">
+                <h4>Chat History (Local)</h4>
+                <ul id="history-list"></ul>
+            </div>
+        </aside>
+
+        <main class="main-content" id="main-chat-content">
+            <header class="main-header">
+                 <h2 id="chat-prompt-header">Chat Prompt</h2>
+                <div class="main-header-actions">
+                    <button class="icon-btn" id="new-chat-btn" title="New Chat (Ctrl+N)">📄</button>
+                    <button id="clear-backend-history-btn" title="Clear current backend session memory">Clear Memory</button>
+                </div>
+            </header>
+
+            <div class="chat-interface">
+                <div id="chat-output">
+                    <div class="welcome-message">
+                        <h1 id="welcome-header">Welcome to My Local AI Studio</h1>
+                        <p>Start a conversation, explore AI capabilities, or load a previous chat from the history.</p>
+                    </div>
+                </div>
+                <div class="system-prompt-container">
+                    <textarea id="system-prompt-input" placeholder="System Prompt (e.g., You are a poetic assistant that responds in rhyme.)"></textarea>
+                </div>
+                <div class="prompt-suggestions">
+                    <button class="suggestion-btn">Explain quantum computing in simple terms.</button>
+                    <button class="suggestion-btn">Write a short poem about the moon.</button>
+                    <button class="suggestion-btn">What is the capital of France?</button>
+                </div>
+                <div class="prompt-input-area">
+                    <textarea id="prompt-input" placeholder="User prompt... (Press Enter to send)"></textarea>
+                    <button id="run-button">Run <span class="shortcut">↵</span></button>
+                </div>
+            </div>
+        </main>
+
+        <aside class="right-sidebar" id="right-settings-sidebar">
+            <div class="right-sidebar-header">
+                <h3>Run settings</h3>
+                <div class="actions">
+                    <button class="icon-btn-sm" id="reset-settings-btn" title="Reset Settings">🔄</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <label for="model-select" style="font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; display: block;">Model</label>
+                <select id="model-select"></select>
+                <div id="model-info" class="model-info-text">Select a model.</div>
+                <div class="setting-item">
+                    <span>Context Window</span>
+                    <span id="context-window-span">-- tokens</span>
+                </div>
+                <div class="setting-item">
+                    <label for="temperature">Temperature</label>
+                    <input type="range" id="temperature" name="temperature" min="0" max="2" step="0.01" value="0.7">
+                    <input type="number" id="temperature-value" value="0.7" min="0" max="2" step="0.01">
+                </div>
+            </div>
+
+            <!-- GGUF Specific Settings (hidden by default) -->
+            <div class="settings-section model-specific-settings" id="gguf-settings" style="display:none;">
+                <h4>GGUF Settings</h4>
+                <div class="setting-item">
+                    <label for="gguf-max-tokens">Max Tokens</label>
+                    <input type="number" id="gguf-max-tokens" value="512" min="1">
+                </div>
+                <div class="setting-item">
+                    <label for="gguf-top-k">Top K</label>
+                    <input type="number" id="gguf-top-k" value="40" min="0">
+                </div>
+                <div class="setting-item">
+                    <label for="gguf-top-p">Top P</label>
+                    <input type="number" id="gguf-top-p" value="0.95" min="0.0" max="1.0" step="0.01">
+                </div>
+                <div class="setting-item">
+                    <label for="gguf-repeat-penalty">Repeat Penalty</label>
+                    <input type="number" id="gguf-repeat-penalty" value="1.1" min="1.0" step="0.01">
+                </div>
+                 <div class="setting-item">
+                    <label for="gguf-n-gpu-layers">GPU Layers</label>
+                    <input type="number" id="gguf-n-gpu-layers" value="-1" title="Number of layers to offload to GPU. -1 for all.">
+                </div>
+                <div class="setting-item column-layout">
+                    <label for="gguf-grammar">GBNF Grammar (optional)</label>
+                    <textarea id="gguf-grammar" placeholder="Example: root ::= (\n  \"object\" | \"array\" | \"string\" | \"number\" | \"boolean\" | \"null\"\n)"></textarea>
+                </div>
+            </div>
+
+            <!-- Regular HF Specific Settings (hidden by default) -->
+            <div class="settings-section model-specific-settings" id="regular-hf-settings" style="display:none;">
+                <h4>Transformer Settings</h4>
+                <div class="setting-item">
+                    <label for="hf-max-new-tokens">Max New Tokens</label>
+                    <input type="number" id="hf-max-new-tokens" value="512" min="1">
+                </div>
+                <div class="setting-item">
+                    <label for="hf-do-sample">Do Sample</label>
+                    <input type="checkbox" id="hf-do-sample" checked>
+                </div>
+                <div class="setting-item">
+                    <label for="hf-top-k">Top K</label>
+                    <input type="number" id="hf-top-k" value="50" min="0">
+                </div>
+                <div class="setting-item">
+                    <label for="hf-top-p">Top P</label>
+                    <input type="number" id="hf-top-p" value="0.95" min="0.0" max="1.0" step="0.01">
+                </div>
+                <div class="setting-item">
+                    <label for="hf-repetition-penalty">Repetition Penalty</label>
+                    <input type="number" id="hf-repetition-penalty" value="1.1" min="1.0" step="0.01">
+                </div>
+                <div class="setting-item">
+                    <label for="hf-use-bnb-4bit" title="Requires bitsandbytes and compatible GPU. May significantly increase load time.">Use 4-bit (BNB)</label>
+                    <input type="checkbox" id="hf-use-bnb-4bit">
+                </div>
+                 <div class="setting-item">
+                    <label for="hf-trust-remote-code" title="Allow execution of custom code from model hub (Needed for some models).">Trust Remote Code</label>
+                    <input type="checkbox" id="hf-trust-remote-code" checked>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => { // Make outer function async
+            // --- APP CONFIG ---
+            const APP_NAME = "My Local AI Studio";
+            const DEFAULT_TEMPERATURE = 0.7; // General default
+            const CHAT_HISTORY_KEY = 'aiStudioChatHistory_local'; 
+            const CHAT_HISTORY_INDEX_KEY = 'aiStudioChatHistoryIndex_local';
+
+            // --- DOM Elements ---
+            const appLogo = document.getElementById('app-logo');
+            const welcomeHeader = document.getElementById('welcome-header');
+            const promptInput = document.getElementById('prompt-input');
+            const systemPromptInput = document.getElementById('system-prompt-input');
+            const runButton = document.getElementById('run-button');
+            const chatOutput = document.getElementById('chat-output');
+            const temperatureSlider = document.getElementById('temperature');
+            const temperatureValue = document.getElementById('temperature-value');
+            const modelSelect = document.getElementById('model-select');
+            const modelInfoDiv = document.getElementById('model-info');
+            const contextWindowSpan = document.getElementById('context-window-span');
+            const welcomeMessageContainer = document.querySelector('.welcome-message');
+            const suggestionButtons = document.querySelectorAll('.suggestion-btn');
+            const newChatBtn = document.getElementById('new-chat-btn');
+            const clearBackendHistoryBtn = document.getElementById('clear-backend-history-btn');
+            const resetSettingsBtn = document.getElementById('reset-settings-btn');
+            const navChat = document.getElementById('nav-chat');
+            const navHistory = document.getElementById('nav-history');
+            const navSTT = document.getElementById('nav-stt');
+            const navTTS = document.getElementById('nav-tts');
+            const historyPanelDisplay = document.getElementById('history-panel-display');
+            const historyListUL = document.getElementById('history-list');
+            const mainChatContent = document.getElementById('main-chat-content');
+            const rightSettingsSidebar = document.getElementById('right-settings-sidebar');
+            const chatPromptHeader = document.getElementById('chat-prompt-header');
+
+            // GGUF specific inputs
+            const ggufSettingsDiv = document.getElementById('gguf-settings');
+            const ggufMaxTokensInput = document.getElementById('gguf-max-tokens');
+            const ggufTopKInput = document.getElementById('gguf-top-k');
+            const ggufTopPInput = document.getElementById('gguf-top-p');
+            const ggufRepeatPenaltyInput = document.getElementById('gguf-repeat-penalty');
+            const ggufNGpuLayersInput = document.getElementById('gguf-n-gpu-layers');
+            const ggufGrammarInput = document.getElementById('gguf-grammar');
+
+            // Regular HF specific inputs
+            const regularHfSettingsDiv = document.getElementById('regular-hf-settings');
+            const hfMaxNewTokensInput = document.getElementById('hf-max-new-tokens');
+            const hfDoSampleCheckbox = document.getElementById('hf-do-sample');
+            const hfTopKInput = document.getElementById('hf-top-k');
+            const hfTopPInput = document.getElementById('hf-top-p');
+            const hfRepetitionPenaltyInput = document.getElementById('hf-repetition-penalty');
+            const hfUseBnb4bitCheckbox = document.getElementById('hf-use-bnb-4bit');
+            const hfTrustRemoteCodeCheckbox = document.getElementById('hf-trust-remote-code');
+
+            const API_BASE_URL = ''; // Assuming Flask serves on same origin
+            const API_CHAT_URL = `${API_BASE_URL}/chat`;
+            const API_CREATE_SESSION_URL = `${API_BASE_URL}/create-session`;
+            const API_CLEAR_HISTORY_URL = `${API_BASE_URL}/clear-backend-history`;
+            const API_MODELS_URL = `${API_BASE_URL}/models`;
+            
+            let currentChatSession = createNewFrontendChatObject(); 
+            let chatHistoryIndex = []; 
+            let currentBackendSessionId = null;
+            let availableModels = []; // To store fetched models list
+
+            // --- DEFAULT PARAM VALUES (from backend handlers if not specified in model.params) ---
+            // These are just for fallback if model.params doesn't provide them,
+            // the backend has its own defaults too.
+            const JS_DEFAULT_GGUF_N_CTX = 4096;
+            const JS_DEFAULT_GGUF_MAX_TOKENS = 512;
+            const JS_DEFAULT_GGUF_TEMP = 0.7;
+            const JS_DEFAULT_GGUF_TOP_K = 40;
+            const JS_DEFAULT_GGUF_TOP_P = 0.95;
+            const JS_DEFAULT_GGUF_REPEAT_PENALTY = 1.1;
+            const JS_DEFAULT_GGUF_N_GPU_LAYERS = -1;
+
+            const JS_DEFAULT_HF_MAX_NEW_TOKENS = 512;
+            const JS_DEFAULT_HF_TEMP = 0.7;
+            const JS_DEFAULT_HF_TOP_K = 50;
+            const JS_DEFAULT_HF_TOP_P = 0.95;
+            const JS_DEFAULT_HF_DO_SAMPLE = true;
+            const JS_DEFAULT_HF_REPETITION_PENALTY = 1.1;
+
+
+            // --- Initialization ---
+            async function initializeApp() {
+                if (appLogo) appLogo.textContent = APP_NAME;
+                if (welcomeHeader) welcomeHeader.innerHTML = `Welcome to ${APP_NAME}`;
+                
+                loadChatHistoryIndex();
+                await fetchAndPopulateModels(); // This will also trigger initial UI update for the first model
+                
+                // If no models, resetSettingsToDefault might not behave as expected
+                // fetchAndPopulateModels handles setting a default if models exist
+                if (availableModels.length === 0) {
+                     modelInfoDiv.textContent = "No models found on server. Please add models to 'models/gguf' or 'models/regular' and restart server.";
+                     temperatureSlider.disabled = true;
+                     temperatureValue.disabled = true;
+                     runButton.disabled = true;
+                } else {
+                    // resetSettingsToDefault() // This will be called by fetchAndPopulate or modelSelect change
+                }
+                
+                createNewBackendSession(() => {
+                    startNewFrontendChatSession(true, false); // Don't reset UI settings, as they were just set
+                    promptInput.focus();
+                });
+            }
+
+            async function fetchAndPopulateModels() {
+                try {
+                    const response = await fetch(API_MODELS_URL);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    availableModels = await response.json();
+                    populateModelDropdown(availableModels); 
+                    
+                    if (availableModels.length > 0) {
+                        // Select the first model by default or a previously selected one if applicable
+                        const previouslySelectedModelId = currentChatSession.model || availableModels[0].id;
+                        const modelExists = availableModels.some(m => m.id === previouslySelectedModelId);
+                        
+                        modelSelect.value = modelExists ? previouslySelectedModelId : availableModels[0].id;
+                        const selectedModelData = availableModels.find(m => m.id === modelSelect.value);
+                        if (selectedModelData) {
+                            updateModelDisplayAndSettings(selectedModelData);
+                        }
+                        runButton.disabled = false;
+                    } else {
+                        modelInfoDiv.textContent = "No models available. Check server logs and model directories.";
+                        contextWindowSpan.textContent = "-- tokens";
+                        runButton.disabled = true;
+                        // Hide all specific settings sections
+                        document.querySelectorAll('.model-specific-settings').forEach(div => div.style.display = 'none');
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch models:", error);
+                    modelInfoDiv.textContent = "Error fetching models from server.";
+                    runButton.disabled = true;
+                }
+            }
+
+            function populateModelDropdown(models) {
+                if (!modelSelect) return;
+                modelSelect.innerHTML = ''; // Clear existing options
+                models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    option.dataset.modelType = model.type;
+                    option.dataset.modelPath = model.path; // Store path for info if needed
+                    // Store all params from backend, this includes defaults and info like n_ctx
+                    option.dataset.modelParams = JSON.stringify(model.params || {}); 
+                    modelSelect.appendChild(option);
+                });
+            }
+            
+            function updateModelDisplayAndSettings(modelData) { // modelData is an object from availableModels
+                if (!modelData || !modelData.params) {
+                    console.warn("updateModelDisplayAndSettings called with invalid modelData", modelData);
+                    modelInfoDiv.textContent = "Error: Invalid model data.";
+                    return;
+                }
+
+                const modelType = modelData.type;
+                const modelParams = modelData.params; // Params from backend for this specific model
+
+                modelInfoDiv.textContent = `Type: ${modelType}. Path: ${modelData.path}`;
+                
+                document.querySelectorAll('.model-specific-settings').forEach(div => div.style.display = 'none');
+
+                // General settings
+                updateTemperatureUI(modelParams.default_temperature !== undefined ? modelParams.default_temperature : DEFAULT_TEMPERATURE);
+
+
+                if (modelType === 'gguf') {
+                    ggufSettingsDiv.style.display = 'block';
+                    contextWindowSpan.textContent = `${modelParams.n_ctx || JS_DEFAULT_GGUF_N_CTX} tokens`;
+                    
+                    ggufMaxTokensInput.value = modelParams.default_max_tokens || JS_DEFAULT_GGUF_MAX_TOKENS;
+                    ggufTopKInput.value = modelParams.default_top_k || JS_DEFAULT_GGUF_TOP_K;
+                    ggufTopPInput.value = modelParams.default_top_p || JS_DEFAULT_GGUF_TOP_P;
+                    ggufRepeatPenaltyInput.value = modelParams.default_repeat_penalty || JS_DEFAULT_GGUF_REPEAT_PENALTY;
+                    ggufNGpuLayersInput.value = modelParams.n_gpu_layers_default !== undefined ? modelParams.n_gpu_layers_default : JS_DEFAULT_GGUF_N_GPU_LAYERS;
+                    ggufGrammarInput.value = ''; 
+
+                } else if (modelType === 'regular') {
+                    regularHfSettingsDiv.style.display = 'block';
+                    // Context window for regular HF models is complex to get client-side,
+                    // server could provide it if it inspects model's config.json
+                    contextWindowSpan.textContent = modelParams.context_window ? `${modelParams.context_window} tokens` : "Model Defined"; 
+                    
+                    hfMaxNewTokensInput.value = modelParams.default_max_new_tokens || JS_DEFAULT_HF_MAX_NEW_TOKENS;
+                    hfDoSampleCheckbox.checked = modelParams.default_do_sample !== undefined ? modelParams.default_do_sample : JS_DEFAULT_HF_DO_SAMPLE;
+                    hfTopKInput.value = modelParams.default_top_k || JS_DEFAULT_HF_TOP_K;
+                    hfTopPInput.value = modelParams.default_top_p || JS_DEFAULT_HF_TOP_P;
+                    hfRepetitionPenaltyInput.value = modelParams.default_repetition_penalty || JS_DEFAULT_HF_REPETITION_PENALTY;
+                    hfUseBnb4bitCheckbox.checked = modelParams.supports_bnb_4bit ? false : false; 
+                    hfTrustRemoteCodeCheckbox.checked = modelParams.trust_remote_code_default !== undefined ? modelParams.trust_remote_code_default : true;
+                } else {
+                    contextWindowSpan.textContent = "-- tokens";
+                }
+                 currentChatSession.model = modelData.id; // Keep currentChatSession sync
+            }
+
+
+            // --- Backend Session Management ---
+            async function createNewBackendSession(callback) {
+                try {
+                    const response = await fetch(API_CREATE_SESSION_URL, { method: 'POST' });
+                    const data = await response.json();
+                    if (data.status === 'success' && data.session_id) {
+                        currentBackendSessionId = data.session_id;
+                        console.log("New backend session created:", currentBackendSessionId);
+                        if (callback) callback();
+                    } else {
+                        console.error("Failed to create backend session:", data.message);
+                        addMessageToChatDOM(`Error: Could not start backend session. ${data.message || ''}`, 'ai', 'error');
+                    }
+                } catch (error) {
+                    console.error("Error calling /create-session:", error);
+                    addMessageToChatDOM(`Error: Network issue creating backend session. ${error.message}`, 'ai', 'error');
+                }
+            }
+
+            async function clearCurrentBackendHistory() {
+                if (!currentBackendSessionId) {
+                    alert("No active backend session to clear.");
+                    return;
+                }
+                if (!confirm("This will clear the AI's memory for the current conversation on the server. Local display will remain. Continue?")) {
+                    return;
+                }
+                try {
+                    const response = await fetch(API_CLEAR_HISTORY_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ session_id: currentBackendSessionId })
+                    });
+                    const data = await response.json();
+                    if (data.status === 'success') {
+                        alert(data.message || "Backend session memory cleared.");
+                        console.log("Backend history cleared for session:", currentBackendSessionId);
+                    } else {
+                        alert(`Failed to clear backend history: ${data.message}`);
+                    }
+                } catch (error) {
+                    console.error("Error calling /clear-backend-history:", error);
+                    alert(`Network error clearing backend history: ${error.message}`);
+                }
+            }
+
+            // --- Frontend Chat Session & Local History Management ---
+            function createNewFrontendChatObject(id = `chat-${Date.now()}`) {
+                return {
+                    id: id, 
+                    name: `Chat ${new Date().toLocaleString()}`,
+                    systemPrompt: systemPromptInput.value || '',
+                    model: modelSelect.value || (availableModels.length > 0 ? availableModels[0].id : null),
+                    temperature: parseFloat(temperatureSlider.value) || DEFAULT_TEMPERATURE,
+                    // We will store model-specific params if we want to restore them when loading a chat
+                    // For now, they reset to model defaults when loading a chat.
+                    messages: [], 
+                    timestamp: Date.now()
+                };
+            }
+            
+            // `resetUISettings` flag: if false, UI settings (model, temp, etc.) are not reset.
+            // Useful when loading a chat, where we want to apply the chat's saved settings.
+            function startNewFrontendChatSession(loadDefaults = true, resetUISettings = true) {
+                currentChatSession = createNewFrontendChatObject(); 
+                if (loadDefaults) {
+                    systemPromptInput.value = ''; 
+                    currentChatSession.systemPrompt = '';
+                    if (resetUISettings && availableModels.length > 0) {
+                        const defaultModel = availableModels[0];
+                        modelSelect.value = defaultModel.id;
+                        updateModelDisplayAndSettings(defaultModel); // This also sets temperature
+                    } else if (resetUISettings) { // No models available
+                        updateTemperatureUI(DEFAULT_TEMPERATURE);
+                    }
+                }
+                chatOutput.innerHTML = ''; 
+                renderWelcomeMessage();
+                promptInput.value = '';
+                adjustTextareaHeight(promptInput);
+                adjustTextareaHeight(systemPromptInput);
+                updateChatPromptHeader();
+                
+                // Create a new backend session when a new frontend chat starts
+                createNewBackendSession(() => {
+                    console.log("New frontend chat started, associated with new backend session:", currentBackendSessionId);
+                    promptInput.focus();
+                    renderHistoryList(); // Highlight the "new" current session if it gets saved immediately
+                });
+            }
+
+
+            function saveCurrentFrontendChatSession() { 
+                if (!currentChatSession || !currentChatSession.id) return;
+                // Don't save empty chats unless they have a system prompt.
+                if (currentChatSession.messages.length === 0 && !systemPromptInput.value.trim()) {
+                    return; 
+                }
+
+                currentChatSession.systemPrompt = systemPromptInput.value;
+                currentChatSession.model = modelSelect.value;
+                currentChatSession.temperature = parseFloat(temperatureSlider.value);
+                currentChatSession.timestamp = Date.now(); 
+
+                if (currentChatSession.messages.length > 0 && currentChatSession.name.startsWith("Chat ")) {
+                     const firstUserMessage = currentChatSession.messages.find(m => m.sender === 'user');
+                     if (firstUserMessage) {
+                        currentChatSession.name = firstUserMessage.text.substring(0, 30) + (firstUserMessage.text.length > 30 ? '...' : '');
+                     }
+                }
+
+                localStorage.setItem(currentChatSession.id, JSON.stringify(currentChatSession));
+                
+                const indexEntry = chatHistoryIndex.find(entry => entry.id === currentChatSession.id);
+                if (indexEntry) {
+                    indexEntry.name = currentChatSession.name;
+                    indexEntry.timestamp = currentChatSession.timestamp;
+                } else {
+                    chatHistoryIndex.push({ 
+                        id: currentChatSession.id, 
+                        name: currentChatSession.name,
+                        timestamp: currentChatSession.timestamp 
+                    });
+                }
+                chatHistoryIndex.sort((a, b) => b.timestamp - a.timestamp); 
+                localStorage.setItem(CHAT_HISTORY_INDEX_KEY, JSON.stringify(chatHistoryIndex));
+                renderHistoryList(); 
+                console.log("Frontend chat session saved to localStorage:", currentChatSession.id);
+            }
+
+            function loadChatHistoryIndex() { 
+                const storedIndex = localStorage.getItem(CHAT_HISTORY_INDEX_KEY);
+                if (storedIndex) {
+                    chatHistoryIndex = JSON.parse(storedIndex);
+                    chatHistoryIndex.sort((a, b) => b.timestamp - a.timestamp);
+                } else {
+                    chatHistoryIndex = [];
+                }
+                renderHistoryList();
+            }
+
+            function loadFrontendChatSession(frontendSessionId) { 
+                const sessionDataString = localStorage.getItem(frontendSessionId);
+                if (sessionDataString) {
+                    const loadedSession = JSON.parse(sessionDataString);
+                    
+                    // Start a new frontend session but don't reset UI settings yet
+                    startNewFrontendChatSession(true, false); 
+                    currentChatSession = loadedSession; // Overwrite with loaded data
+
+                    systemPromptInput.value = currentChatSession.systemPrompt;
+                    
+                    const modelInAvailable = availableModels.find(m => m.id === currentChatSession.model);
+                    if (modelInAvailable) {
+                        modelSelect.value = currentChatSession.model;
+                        updateModelDisplayAndSettings(modelInAvailable); // This sets model-specific UI and temp
+                        // Override temperature if it was saved in the session and differs from model default
+                        if (currentChatSession.temperature !== undefined) {
+                           updateTemperatureUI(currentChatSession.temperature);
+                        }
+                    } else {
+                        // Model not found, use first available or default
+                        console.warn(`Model ${currentChatSession.model} from saved chat not found. Using default.`);
+                        if (availableModels.length > 0) {
+                            modelSelect.value = availableModels[0].id;
+                            updateModelDisplayAndSettings(availableModels[0]);
+                        }
+                    }
+
+                    chatOutput.innerHTML = ''; 
+                    if (currentChatSession.messages.length > 0) {
+                        hideWelcomeMessage();
+                        currentChatSession.messages.forEach(msg => addMessageToChatDOM(msg.text, msg.sender));
+                    } else {
+                        renderWelcomeMessage();
+                    }
+                    
+                    adjustTextareaHeight(systemPromptInput);
+                    switchToChatView(); 
+                    updateChatPromptHeader();
+                    
+                    // A new backend session is already created by startNewFrontendChatSession
+                    console.log("Loaded frontend chat session:", frontendSessionId, "Associated with new backend session:", currentBackendSessionId);
+                    promptInput.focus();
+                    renderHistoryList(); // Update selection in history list
+                }
+            }
+            
+            function deleteFrontendChatSession(frontendSessionId, event) { 
+                event.stopPropagation(); 
+                const chatToDelete = chatHistoryIndex.find(s => s.id === frontendSessionId);
+                if (!confirm(`Are you sure you want to delete local chat: "${chatToDelete?.name || frontendSessionId}"? This does not affect server memory of past sessions.`)) {
+                    return;
+                }
+                localStorage.removeItem(frontendSessionId);
+                chatHistoryIndex = chatHistoryIndex.filter(entry => entry.id !== frontendSessionId);
+                localStorage.setItem(CHAT_HISTORY_INDEX_KEY, JSON.stringify(chatHistoryIndex));
+                renderHistoryList();
+
+                if (currentChatSession && currentChatSession.id === frontendSessionId) {
+                    startNewFrontendChatSession(true, true); // Start a completely fresh session
+                }
+                console.log("Deleted frontend chat session from localStorage:", frontendSessionId);
+            }
+
+            function renderHistoryList() { 
+                historyListUL.innerHTML = '';
+                chatHistoryIndex.forEach(entry => {
+                    const li = document.createElement('li');
+                    li.classList.add('history-item');
+                    li.dataset.sessionId = entry.id; 
+                    if (currentChatSession && entry.id === currentChatSession.id) {
+                        li.classList.add('selected-history');
+                    }
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.classList.add('history-item-name');
+                    nameSpan.textContent = entry.name || `Chat ${new Date(entry.timestamp).toLocaleDateString()}`;
+                    nameSpan.title = entry.name || `Chat ${new Date(entry.timestamp).toLocaleDateString()}`;
+                    li.appendChild(nameSpan);
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.classList.add('history-item-delete');
+                    deleteBtn.innerHTML = '×'; 
+                    deleteBtn.title = "Delete local chat";
+                    deleteBtn.onclick = (event) => deleteFrontendChatSession(entry.id, event);
+                    li.appendChild(deleteBtn);
+                    
+                    li.onclick = () => {
+                         document.querySelectorAll('.history-item.selected-history').forEach(item => item.classList.remove('selected-history'));
+                         li.classList.add('selected-history');
+                         loadFrontendChatSession(entry.id); 
+                    }
+                    historyListUL.appendChild(li);
+                });
+            }
+            
+            function updateChatPromptHeader() {
+                 if (currentChatSession && currentChatSession.name && !currentChatSession.name.startsWith("Chat ")) {
+                     chatPromptHeader.textContent = currentChatSession.name;
+                 } else {
+                     chatPromptHeader.textContent = "New Chat";
+                 }
+            }
+            
+            function resetSettingsToDefault() {
+                if (availableModels.length > 0) {
+                    const firstModel = availableModels[0];
+                    modelSelect.value = firstModel.id;
+                    updateModelDisplayAndSettings(firstModel); // This handles all sub-settings
+                } else {
+                    // No models available, set general defaults
+                    updateTemperatureUI(DEFAULT_TEMPERATURE);
+                    modelInfoDiv.textContent = "No models loaded.";
+                    contextWindowSpan.textContent = "-- tokens";
+                     document.querySelectorAll('.model-specific-settings').forEach(div => div.style.display = 'none');
+                }
+                systemPromptInput.value = ""; // Also clear system prompt on full reset
+                adjustTextareaHeight(systemPromptInput);
+                promptInput.focus();
+            }
+
+            function renderWelcomeMessage() {
+                if (welcomeMessageContainer) {
+                    welcomeMessageContainer.style.display = 'flex';
+                }
+            }
+            function hideWelcomeMessage() {
+                if (welcomeMessageContainer) welcomeMessageContainer.style.display = 'none';
+            }
+
+            function adjustTextareaHeight(textarea) {
+                if (textarea) {
+                    textarea.style.height = 'auto';
+                    setTimeout(() => { // Debounce slightly for better calculation
+                        textarea.style.height = (textarea.scrollHeight) + 'px';
+                    }, 0);
+                }
+            }
+            
+            function updateTemperatureUI(value) {
+                const val = parseFloat(value);
+                temperatureSlider.value = val.toFixed(2); // Keep precision for slider
+                temperatureValue.value = val.toFixed(2); // Keep precision for number input
+            }
+
+            [promptInput, systemPromptInput].forEach(textarea => {
+                if (textarea) {
+                    textarea.addEventListener('input', () => adjustTextareaHeight(textarea));
+                    adjustTextareaHeight(textarea); // Initial adjustment
+                }
+            });
+
+            temperatureSlider.addEventListener('input', (e) => updateTemperatureUI(e.target.value));
+            temperatureValue.addEventListener('input', (e) => {
+                let val = parseFloat(e.target.value);
+                if (isNaN(val)) val = DEFAULT_TEMPERATURE;
+                if (val < 0) val = 0; 
+                if (val > parseFloat(temperatureSlider.max)) val = parseFloat(temperatureSlider.max); // Use slider's max
+                updateTemperatureUI(val);
+            });
+            
+            modelSelect.addEventListener('change', (event) => {
+                const selectedOption = event.target.selectedOptions[0];
+                const modelId = selectedOption.value;
+                const selectedModelData = availableModels.find(m => m.id === modelId);
+                if (selectedModelData) {
+                    updateModelDisplayAndSettings(selectedModelData);
+                }
+            });
+
+
+            function addMessageToChatDOM(text, sender, type = 'text', isStreaming = false) {
+                hideWelcomeMessage();
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message', sender);
+                if (type === 'error') messageDiv.classList.add('error');
+                
+                const contentSpan = document.createElement('span');
+                // Basic Markdown-like link rendering: replace [text](url) with <a href="url" target="_blank">text</a>
+                // This is very rudimentary. For full Markdown, a library would be needed.
+                const linkedText = text.replace(/\[([^\]]+)]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+                contentSpan.innerHTML = linkedText; // Use innerHTML to render links
+                
+                messageDiv.appendChild(contentSpan);
+
+                if (isStreaming && sender === 'ai') {
+                    const cursorSpan = document.createElement('span');
+                    cursorSpan.classList.add('cursor');
+                    messageDiv.appendChild(cursorSpan);
+                    messageDiv.dataset.streaming = "true"; 
+                }
+                
+                chatOutput.appendChild(messageDiv);
+                chatOutput.scrollTop = chatOutput.scrollHeight;
+                return messageDiv; 
+            }
+
+            function updateStreamingMessage(aiMessageDiv, chunk) {
+                if (aiMessageDiv && aiMessageDiv.dataset.streaming === "true") {
+                    const contentSpan = aiMessageDiv.querySelector('span:not(.cursor)');
+                    if (contentSpan) {
+                        // Append chunk by chunk for link parsing to work correctly on full response
+                        contentSpan.innerHTML += chunk.replace(/\[([^\]]+)]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+                        chatOutput.scrollTop = chatOutput.scrollHeight;
+                    }
+                }
+            }
+
+            function finalizeStreamingMessage(aiMessageDiv, fullText) {
+                 if (aiMessageDiv && aiMessageDiv.dataset.streaming === "true") {
+                    const cursor = aiMessageDiv.querySelector('.cursor');
+                    if (cursor) cursor.remove();
+                    delete aiMessageDiv.dataset.streaming;
+
+                    // Re-render the full text with link parsing
+                    const contentSpan = aiMessageDiv.querySelector('span:not(.cursor)');
+                    if (contentSpan && fullText) {
+                         contentSpan.innerHTML = fullText.replace(/\[([^\]]+)]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+                    }
+                }
+            }
+
+            const handleRunPrompt = async () => {
+                if (!currentBackendSessionId) {
+                    addMessageToChatDOM("Error: No active backend session. Please try creating a new chat or reloading.", 'ai', 'error');
+                    await createNewBackendSession(() => {
+                        if(currentBackendSessionId) {
+                             addMessageToChatDOM("New backend session started. Please try your prompt again.", 'ai', 'error'); // System messages are not styled well
+                        }
+                    });
+                    return;
+                }
+
+                const userPromptText = promptInput.value.trim();
+                if (!userPromptText) {
+                    promptInput.focus();
+                    return;
+                }
+                 if (modelSelect.value === "" || !modelSelect.value) {
+                    addMessageToChatDOM("Error: No model selected. Please choose a model from settings.", 'ai', 'error');
+                    return;
+                }
+
+
+                addMessageToChatDOM(userPromptText, 'user');
+                currentChatSession.messages.push({ sender: 'user', text: userPromptText });
+                if (currentChatSession.messages.filter(m => m.sender === 'user').length === 1 && currentChatSession.name.startsWith("Chat ")) {
+                     currentChatSession.name = userPromptText.substring(0, 30) + (userPromptText.length > 30 ? '...' : '');
+                     updateChatPromptHeader(); 
+                }
+
+                promptInput.value = '';
+                adjustTextareaHeight(promptInput);
+                runButton.disabled = true;
+
+                let aiMessageDiv = addMessageToChatDOM("", 'ai', 'text', true); 
+                let fullAiResponseText = "";
+
+                // --- Collect parameters for the backend ---
+                const selectedOption = modelSelect.selectedOptions[0];
+                const modelType = selectedOption.dataset.modelType;
+                let modelSpecificParams = {};
+                let modelLoadParams = {}; 
+
+                if (modelType === 'gguf') {
+                    modelSpecificParams = {
+                        max_tokens: parseInt(ggufMaxTokensInput.value) || JS_DEFAULT_GGUF_MAX_TOKENS,
+                        top_k: parseInt(ggufTopKInput.value) || JS_DEFAULT_GGUF_TOP_K,
+                        top_p: parseFloat(ggufTopPInput.value) || JS_DEFAULT_GGUF_TOP_P,
+                        repeat_penalty: parseFloat(ggufRepeatPenaltyInput.value) || JS_DEFAULT_GGUF_REPEAT_PENALTY,
+                        grammar_str: ggufGrammarInput.value.trim() || null,
+                    };
+                    modelLoadParams = { 
+                        n_gpu_layers: parseInt(ggufNGpuLayersInput.value), 
+                        // n_ctx could also be a load param if the user can change it and wants to reload the model with new context
+                        // For now, n_ctx is assumed to be set when the model is first loaded by the server.
+                    };
+                } else if (modelType === 'regular') {
+                    modelSpecificParams = {
+                        max_new_tokens: parseInt(hfMaxNewTokensInput.value) || JS_DEFAULT_HF_MAX_NEW_TOKENS,
+                        do_sample: hfDoSampleCheckbox.checked,
+                        top_k: parseInt(hfTopKInput.value) || JS_DEFAULT_HF_TOP_K,
+                        top_p: parseFloat(hfTopPInput.value) || JS_DEFAULT_HF_TOP_P,
+                        repetition_penalty: parseFloat(hfRepetitionPenaltyInput.value) || JS_DEFAULT_HF_REPETITION_PENALTY,
+                    };
+                    modelLoadParams = { 
+                        use_bnb_4bit: hfUseBnb4bitCheckbox.checked,
+                        trust_remote_code: hfTrustRemoteCodeCheckbox.checked,
+                    };
+                }
+
+                const payload = {
+                    session_id: currentBackendSessionId, 
+                    prompt: userPromptText,
+                    system_prompt: systemPromptInput.value.trim(),
+                    model_id: modelSelect.value,
+                    temperature: parseFloat(temperatureSlider.value),
+                    model_specific_params: modelSpecificParams,
+                    model_load_params: modelLoadParams 
+                };
+                
+                try {
+                    const response = await fetch(API_CHAT_URL, { 
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        finalizeStreamingMessage(aiMessageDiv, fullAiResponseText); // Pass full text for re-render
+                        aiMessageDiv.remove(); 
+                        const errorText = await response.text();
+                        let errorData = { error: "Server error occurred." };
+                        try { errorData = JSON.parse(errorText); } catch (e) { errorData.error = errorText; }
+                        addMessageToChatDOM(errorData.error || `HTTP error! status: ${response.status}`, 'ai', 'error');
+                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+
+                    // Stream handling loop
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        
+                        const sseLines = decoder.decode(value, { stream: true }).split('\n\n');
+                        for (const line of sseLines) {
+                            if (line.startsWith('data:')) {
+                                try {
+                                    const jsonData = JSON.parse(line.substring(5).trim());
+                                    if (jsonData.error) {
+                                        console.error("Stream error from backend:", jsonData.error);
+                                        const errorChunk = `\n[Error: ${jsonData.error}]`;
+                                        fullAiResponseText += errorChunk; 
+                                        updateStreamingMessage(aiMessageDiv, errorChunk); // Update with error chunk
+                                        if(jsonData.is_final) break; 
+                                    } else if (jsonData.text_chunk) {
+                                        fullAiResponseText += jsonData.text_chunk;
+                                        updateStreamingMessage(aiMessageDiv, jsonData.text_chunk); // Stream visual update
+                                    }
+                                    if (jsonData.is_final) {
+                                        if(jsonData.full_response && jsonData.full_response !== fullAiResponseText){ 
+                                            // If backend provides a final full_response, prefer it.
+                                            // This can happen if backend does post-processing or error aggregation.
+                                            fullAiResponseText = jsonData.full_response;
+                                        }
+                                        finalizeStreamingMessage(aiMessageDiv, fullAiResponseText); // Final render with full text
+                                        currentChatSession.messages.push({ sender: 'ai', text: fullAiResponseText });
+                                        saveCurrentFrontendChatSession(); 
+                                        break; // Break from sseLines loop
+                                    }
+                                } catch (e) {
+                                    console.warn("Error parsing SSE JSON:", e, "Line:", line);
+                                }
+                            }
+                        }
+                        if (document.querySelector('[data-streaming="true"]') === null) break; // Break from while(true) if streaming ended
+                    }
+
+                } catch (error) {
+                    console.error('Fetch/Stream Error:', error);
+                    finalizeStreamingMessage(aiMessageDiv, fullAiResponseText);
+                    if (aiMessageDiv && (!aiMessageDiv.querySelector('span:not(.cursor)') || !aiMessageDiv.querySelector('span:not(.cursor)').textContent.trim())) {
+                        aiMessageDiv.remove(); // Remove if it was empty
+                        addMessageToChatDOM(`Error: ${error.message}`, 'ai', 'error');
+                    } else if (aiMessageDiv) { 
+                         // If some text was streamed, mark it as error and append
+                         aiMessageDiv.classList.add('error'); 
+                         updateStreamingMessage(aiMessageDiv, `\n[Stream/Network Error: ${error.message}]`);
+                         fullAiResponseText += `\n[Stream/Network Error: ${error.message}]`;
+                    }
+                    currentChatSession.messages.push({ sender: 'ai', text: fullAiResponseText || `Error: ${error.message}` }); 
+                    saveCurrentFrontendChatSession(); 
+                } finally {
+                    runButton.disabled = false;
+                    promptInput.focus();
+                }
+            };
+
+            function switchToChatView() {
+                mainChatContent.classList.remove('hidden-view');
+                rightSettingsSidebar.classList.remove('hidden-view');
+                historyPanelDisplay.style.display = 'none';
+                promptInput.focus();
+                renderHistoryList(); 
+            }
+
+            function switchToHistoryView() {
+                mainChatContent.classList.add('hidden-view');
+                rightSettingsSidebar.classList.add('hidden-view');
+                historyPanelDisplay.style.display = 'block';
+                renderHistoryList(); 
+            }
+
+            function handleNavClick(navItem) {
+                document.querySelectorAll('.left-sidebar nav li.active').forEach(li => li.classList.remove('active'));
+                navItem.classList.add('active');
+                
+                if (navItem.id === 'nav-chat') {
+                    switchToChatView();
+                } else if (navItem.id === 'nav-history') {
+                    switchToHistoryView();
+                } else {
+                    let featureName = navItem.textContent.replace(/<span class="icon">.*?<\/span>/i, '').trim();
+                    alert(`The "${featureName}" interface is not yet implemented.`);
+                    // Revert to chat view and active status
+                    switchToChatView(); 
+                    document.querySelectorAll('.left-sidebar nav li.active').forEach(li => li.classList.remove('active'));
+                    navChat.classList.add('active'); 
+                }
+            }
+
+            if (newChatBtn) newChatBtn.addEventListener('click', () => startNewFrontendChatSession(true, true));
+            if (clearBackendHistoryBtn) clearBackendHistoryBtn.addEventListener('click', clearCurrentBackendHistory);
+            if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', () => { resetSettingsToDefault(); });
+            
+            if (runButton) runButton.addEventListener('click', handleRunPrompt);
+            
+            promptInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    handleRunPrompt();
+                } else if (event.ctrlKey && (event.key === 'n' || event.key === 'N')) { 
+                    event.preventDefault();
+                    startNewFrontendChatSession(true, true);
+                }
+            });
+
+            suggestionButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    promptInput.value = button.textContent;
+                    adjustTextareaHeight(promptInput);
+                    promptInput.focus();
+                    // Optionally, uncomment to directly run after clicking suggestion
+                    // handleRunPrompt(); 
+                });
+            });
+            
+            [navChat, navHistory, navSTT, navTTS].forEach(navItem => {
+                if (navItem) {
+                    navItem.addEventListener('click', () => handleNavClick(navItem));
+                }
+            });
+
+            await initializeApp(); // Call the async init function
+        });
+    </script>
+</body>
+</html>
