@@ -2,3 +2,4 @@
 *.gguf
 .*pyc
 __pycache__
+models
