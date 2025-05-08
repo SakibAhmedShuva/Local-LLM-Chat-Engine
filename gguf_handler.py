@@ -38,46 +38,32 @@ def convert_messages_to_gguf_format(llama_index_messages):
 def load_gguf_model(
     model_spec: dict,
     n_gpu_layers=DEFAULT_N_GPU_LAYERS,
-    n_ctx=DEFAULT_N_CTX, # This n_ctx is for loading the model
+    n_ctx=DEFAULT_N_CTX, 
     **kwargs
 ):
     """
     Loads a GGUF model using llama_cpp.Llama.
-    Can load from a local path or download from Hugging Face Hub.
-    model_spec: dict like {'path': 'local/path.gguf'} (for local)
-                       OR {'repo_id': 'TheBloke/..', 'filename': 'model.gguf'} (for Hub)
-    kwargs: Additional arguments for Llama constructor or Llama.from_pretrained.
     """
     local_model_path = model_spec.get('path')
     hub_repo_id = model_spec.get('repo_id')
     hub_filename = model_spec.get('filename')
-
-    # Filter out keys already handled by main params or not relevant to Llama constructor
-    # to avoid passing them twice or causing errors.
-    # 'verbose' is handled by the explicit `verbose=kwargs.get('verbose', False)` passed to Llama() / Llama.from_pretrained().
-    # Thus, 'verbose' should NOT be in the list for `llama_constructor_kwargs`.
-    # Other keys like 'n_gpu_layers', 'n_ctx' are also handled explicitly as function parameters.
-    # model_path, repo_id, filename are from model_spec.
     
-    # Whitelist of Llama constructor arguments that can be passed via kwargs from the calling function (e.g., app.py).
-    # 'verbose' is excluded here because it's passed directly to Llama/Llama.from_pretrained.
-    pass_through_keys = ['seed', 'logits_all', 'embedding'] # Add other valid Llama args like 'n_threads', 'n_batch' if needed.
+    pass_through_keys = ['seed', 'logits_all', 'embedding', 'n_threads', 'n_batch'] # Added n_threads, n_batch
     llama_constructor_kwargs = {
-        k: v for k, v in kwargs.items() if k in pass_through_keys
+        k: v for k, v in kwargs.items() if k in pass_through_keys and v is not None # Ensure value is not None
     }
-
 
     try:
         if hub_repo_id and hub_filename:
             logger.info(f"Loading GGUF model from Hugging Face Hub: repo_id='{hub_repo_id}', filename='{hub_filename}' "
-                        f"with n_gpu_layers={n_gpu_layers}, n_ctx={n_ctx}")
+                        f"with n_gpu_layers={n_gpu_layers}, n_ctx={n_ctx}, constructor_kwargs: {llama_constructor_kwargs}")
             llm = Llama.from_pretrained(
                 repo_id=hub_repo_id,
                 filename=hub_filename,
                 n_gpu_layers=n_gpu_layers,
                 n_ctx=n_ctx,
-                verbose=kwargs.get('verbose', False), # Pass verbose explicitly
-                **llama_constructor_kwargs # Pass other filtered kwargs (which no longer contain 'verbose')
+                verbose=kwargs.get('verbose', False), 
+                **llama_constructor_kwargs 
             )
             logger.info(f"Successfully loaded GGUF model from Hub: {hub_repo_id}/{hub_filename}")
         elif local_model_path:
@@ -85,13 +71,13 @@ def load_gguf_model(
                 logger.error(f"Local GGUF model path does not exist: {local_model_path}")
                 raise FileNotFoundError(f"Local GGUF model not found at {local_model_path}")
             logger.info(f"Loading GGUF model from local path: {local_model_path} "
-                        f"with n_gpu_layers={n_gpu_layers}, n_ctx={n_ctx}")
+                        f"with n_gpu_layers={n_gpu_layers}, n_ctx={n_ctx}, constructor_kwargs: {llama_constructor_kwargs}")
             llm = Llama(
                 model_path=local_model_path,
                 n_gpu_layers=n_gpu_layers,
                 n_ctx=n_ctx,
-                verbose=kwargs.get('verbose', False), # Pass verbose explicitly
-                **llama_constructor_kwargs # Pass other filtered kwargs (which no longer contain 'verbose')
+                verbose=kwargs.get('verbose', False), 
+                **llama_constructor_kwargs 
             )
             logger.info(f"Successfully loaded GGUF model from local path: {local_model_path}")
         else:
@@ -111,19 +97,19 @@ def load_gguf_model(
 
 def generate_gguf_chat_stream(
     llm_instance: Llama,
-    messages: list, # Expects LlamaIndex ChatMessage objects
+    messages: list, 
     temperature: float = DEFAULT_GGUF_TEMPERATURE,
-    max_tokens: int = DEFAULT_MAX_TOKENS, # This max_tokens is for generation
+    max_tokens: int = DEFAULT_MAX_TOKENS, 
     top_k: int = DEFAULT_TOP_K,
     top_p: float = DEFAULT_TOP_P,
     repeat_penalty: float = DEFAULT_REPEAT_PENALTY,
-    stop: list = None, # List of stop strings
-    grammar_str: str = None, # GBNF grammar as a string
-    **kwargs # For other create_chat_completion params
+    stop: list = None, 
+    grammar_str: str = None, 
+    **kwargs 
 ):
     """
     Generates a chat response stream from a loaded GGUF model.
-    Yields delta content chunks.
+    Yields delta content chunks, with logic to strip leading EOS-like tokens from the first chunk.
     """
     converted_messages = convert_messages_to_gguf_format(messages)
     logger.info(f"Generating GGUF stream. Msgs: {len(converted_messages)}, Temp: {temperature}, MaxTokens: {max_tokens}")
@@ -145,25 +131,72 @@ def generate_gguf_chat_stream(
         "repeat_penalty": repeat_penalty,
         "stream": True,
     }
-    if stop:
+    if stop: # User-defined stop sequences
         completion_kwargs["stop"] = stop
     if grammar:
         completion_kwargs["grammar"] = grammar
 
-    # Add any other specific kwargs passed from the payload's 'model_specific_params'
-    # These are generation parameters.
     for k, v in kwargs.items():
         if k not in completion_kwargs and v is not None:
             completion_kwargs[k] = v
+
+    # --- Logic for stripping leading EOS/stop tokens ---
+    first_chunk_processed = False
+    
+    # 1. Get model's specific EOS token string, if possible
+    model_specific_eos_str = ""
+    try:
+        eos_token_id = llm_instance.token_eos()
+        if eos_token_id != -1 and hasattr(llm_instance, 'detokenize'): # Check if detokenize is available
+            # Do not .strip() here, as leading/trailing whitespace might be part of the token representation
+            model_specific_eos_str = llm_instance.detokenize([eos_token_id]).decode('utf-8', errors='replace')
+    except Exception as e:
+        logger.warning(f"Could not detokenize model's specific EOS token ID ({eos_token_id if 'eos_token_id' in locals() else 'unknown'}): {e}")
+
+    # 2. Compile a list of all potential leading tokens to check and strip
+    potential_leading_tokens_to_strip = []
+    if model_specific_eos_str:
+        potential_leading_tokens_to_strip.append(model_specific_eos_str)
+    
+    if stop: # Add user-provided stop sequences
+        for s_item in stop:
+            if isinstance(s_item, str) and s_item and s_item not in potential_leading_tokens_to_strip:
+                potential_leading_tokens_to_strip.append(s_item)
+    
+    # Add common fallbacks (especially if model-specific or user `stop` didn't cover them)
+    common_fallback_eos_tokens = ["</s>", "<|endoftext|>", "<|im_end|>", "<|END_OF_TURN_TOKEN|>", "<s>"] # Added <s> as some models might prefix with it
+    for fb_token in common_fallback_eos_tokens:
+        if fb_token not in potential_leading_tokens_to_strip:
+            potential_leading_tokens_to_strip.append(fb_token)
+    
+    # Filter out any empty strings that might have accidentally been added
+    potential_leading_tokens_to_strip = [s for s in potential_leading_tokens_to_strip if s]
+    logger.debug(f"GGUF: Will check for and strip leading sequences from first chunk: {potential_leading_tokens_to_strip}")
+    # --- End of stripping logic setup ---
 
     try:
         for chunk in llm_instance.create_chat_completion(**completion_kwargs):
             delta = chunk['choices'][0]['delta']
             content_chunk = delta.get('content', '')
-            if content_chunk:
-                yield content_chunk
+
+            if content_chunk: # Process only non-empty chunks
+                if not first_chunk_processed:
+                    original_chunk_for_log = content_chunk # For logging purposes
+                    for token_to_strip in potential_leading_tokens_to_strip:
+                        if content_chunk.startswith(token_to_strip):
+                            content_chunk = content_chunk[len(token_to_strip):]
+                            logger.info(
+                                f"GGUF: Stripped leading '{token_to_strip.encode('unicode_escape').decode('utf-8')}' from first chunk. "
+                                f"Original: '{original_chunk_for_log[:60].encode('unicode_escape').decode('utf-8')}', " # Limit log length
+                                f"New: '{content_chunk[:60].encode('unicode_escape').decode('utf-8')}'"
+                            )
+                            break # Stripped one, no need to check others for this chunk
+                    first_chunk_processed = True # Mark as processed after attempting to strip the first non-empty chunk
+                
+                if content_chunk: # If anything remains after potential stripping
+                    yield content_chunk
+            
             if chunk['choices'][0].get('finish_reason') is not None:
-                # This indicates the end of the stream for this choice
                 break
     except Exception as e:
         logger.error(f"Error during GGUF stream generation: {e}", exc_info=True)
