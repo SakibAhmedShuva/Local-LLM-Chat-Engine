@@ -1,3 +1,6 @@
+# gguf_handler.py
+# ... (no changes in this file based on the diagnosis) ...
+
 # app.py
 import os
 import json
@@ -59,6 +62,7 @@ def scan_available_models():
                         continue
                     
                     model_def.setdefault('source_type', 'hub') # Mark as hub-sourced
+                    model_def.setdefault('params', {}) # Ensure 'params' key exists
                     MODEL_INFO_CACHE.append(model_def)
                     processed_ids.add(model_def["id"])
                     logger.info(f"Loaded model definition from '{ONLINE_MODELS_CONFIG_FILE}': {model_def['name']}")
