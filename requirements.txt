@@ -2,10 +2,14 @@ Flask==3.1.0
 flask_cors==5.0.1
 llama_index==0.12.34
 python-dotenv==1.1.0
-torch==2.3.1
-transformers==4.50.0.dev0
+#torch==2.3.1
+transformers>4.50.0
 llama-cpp-python==0.3.8
 numpy<2
+dotenv==0.9.9
+llama_index
+
+
 
 
 #Main
