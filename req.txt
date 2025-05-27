@@ -1,1 +1,0 @@
-#CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
